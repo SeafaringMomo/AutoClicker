@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using AutoClicker.Models;
 using AutoClicker.Native;
+using AutoClicker.Services;
 
 namespace AutoClicker.Services
 {
@@ -29,6 +30,7 @@ namespace AutoClicker.Services
                 return true;
             }, IntPtr.Zero);
 
+            Logger.Log($"枚举顶层窗口完成，共 {windows.Count} 个", LogLevel.Info, "WindowTree");
             return windows;
         }
 
@@ -39,6 +41,7 @@ namespace AutoClicker.Services
         {
             var children = new List<WindowTreeNode>();
             CollectChildren(parentHwnd, children, 0, maxDepth);
+            Logger.Log($"获取子窗口: parent=0x{parentHwnd:X8}, count={children.Count}", LogLevel.Info, "WindowTree");
             return children;
         }
 
@@ -63,6 +66,7 @@ namespace AutoClicker.Services
                 }
             }
 
+            Logger.Log($"构建窗口树完成: 根节点 {result.Count} 个, 最大深度 {maxDepth}", LogLevel.Info, "WindowTree");
             return result;
         }
 
@@ -73,7 +77,11 @@ namespace AutoClicker.Services
         {
             Win32.GetCursorPos(out var pt);
             IntPtr hwnd = Win32.WindowFromPoint(pt);
-            if (hwnd == IntPtr.Zero) return null;
+            if (hwnd == IntPtr.Zero)
+            {
+                Logger.Log("鼠标下无窗口", LogLevel.Warning, "WindowTree");
+                return null;
+            }
 
             // 获取顶层窗口
             IntPtr rootHwnd = Win32.GetAncestor(hwnd, Win32.GA_ROOT);
@@ -98,6 +106,7 @@ namespace AutoClicker.Services
                 node = child;
             }
 
+            Logger.Log($"获取鼠标下窗口信息: hwnd=0x{hwnd:X8}, root=0x{rootHwnd:X8}, path节点数={path.Count}", LogLevel.Info, "WindowTree");
             return root;
         }
 
@@ -109,7 +118,7 @@ namespace AutoClicker.Services
             Win32.GetWindowThreadProcessId(hWnd, out uint pid);
             uint style = Win32.GetWindowLong(hWnd, Win32.GWL_STYLE);
 
-            return new WindowTreeNode
+            var node = new WindowTreeNode
             {
                 Handle = hWnd,
                 ClassName = Win32.GetClassNameStr(hWnd),
@@ -119,6 +128,9 @@ namespace AutoClicker.Services
                 IsEnabled = Win32.IsWindowEnabled(hWnd),
                 StyleInfo = $"0x{style:X8}",
             };
+
+            Logger.Log($"构建窗口节点: hwnd=0x{hWnd:X8}, class={node.ClassName}, title={node.Title}, visible={node.IsVisible}", LogLevel.Debug, "WindowTree");
+            return node;
         }
 
         // ===== 内部方法 =====

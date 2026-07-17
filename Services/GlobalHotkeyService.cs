@@ -34,14 +34,26 @@ namespace AutoClicker.Services
         /// <param name="virtualKey">虚拟键码 (如 VK_F6=0x75)</param>
         public void Initialize(IntPtr windowHandle, uint modifiers = 0x0000, uint virtualKey = 0x75) // F6
         {
+            if (windowHandle == IntPtr.Zero)
+            {
+                Logger.Log("热键服务初始化失败: 窗口句柄为空", LogLevel.Error, "Hotkey");
+                throw new ArgumentException("窗口句柄不能为空", nameof(windowHandle));
+            }
+
             _windowHandle = windowHandle;
             Modifiers = modifiers;
             VirtualKey = virtualKey;
 
             _source = HwndSource.FromHwnd(windowHandle);
-            _source?.AddHook(WndProc);
+            if (_source == null)
+            {
+                Logger.Log($"热键服务初始化失败: 无法从句柄 0x{windowHandle:X8} 获取 HwndSource", LogLevel.Error, "Hotkey");
+                throw new InvalidOperationException("无法获取窗口消息源");
+            }
+            _source.AddHook(WndProc);
 
             Register(modifiers, virtualKey);
+            Logger.Log($"全局热键初始化完成: handle=0x{windowHandle:X8}, mod=0x{modifiers:X}, key=0x{virtualKey:X}", LogLevel.Info, "Hotkey");
         }
 
         /// <summary>
@@ -62,8 +74,11 @@ namespace AutoClicker.Services
             if (!IsRegistered)
             {
                 // 热键注册失败 (可能被其他程序占用)
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Hotkey] 注册失败: mod=0x{modifiers:X}, key=0x{virtualKey:X}");
+                Logger.Log($"热键注册失败: mod=0x{modifiers:X}, key=0x{virtualKey:X} (可能被其他程序占用)", LogLevel.Warning, "Hotkey");
+            }
+            else
+            {
+                Logger.Log($"热键注册成功: mod=0x{modifiers:X}, key=0x{virtualKey:X}", LogLevel.Info, "Hotkey");
             }
         }
 
@@ -76,6 +91,7 @@ namespace AutoClicker.Services
             {
                 Win32.UnregisterHotKey(_windowHandle, _hotkeyId);
                 IsRegistered = false;
+                Logger.Log("热键已注销", LogLevel.Info, "Hotkey");
             }
         }
 
@@ -90,6 +106,7 @@ namespace AutoClicker.Services
                 int id = wParam.ToInt32();
                 if (id == _hotkeyId)
                 {
+                    Logger.Log("热键触发 (F6)", LogLevel.Debug, "Hotkey");
                     HotkeyPressed?.Invoke();
                     handled = true;
                 }
@@ -102,6 +119,7 @@ namespace AutoClicker.Services
             Unregister();
             _source?.RemoveHook(WndProc);
             _source = null;
+            Logger.Log("热键服务已释放", LogLevel.Info, "Hotkey");
         }
     }
 }

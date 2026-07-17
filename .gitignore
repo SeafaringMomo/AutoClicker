@@ -21,3 +21,73 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+### .NET / WPF ###
+# Build results
+[Bb]in/
+[Oo]bj/
+
+# .NET Core
+*.runtimeconfig.json
+*.runtimeconfig.dev.json
+
+# User-specific files
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS IDE
+.vs/
+*.suo
+*.tlog
+*.tlog.*
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Local History for Visual Studio
+.localhistory/
+
+# Test Results
+*.trx
+TestResults/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+
+# Publish output
+publish/
+
+# Log files
+*.log
+AutoClicker.log
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Profiling
+*.profiler
+*.sap
+
+# MSBuild
+*.targets
+
+# Diagnostic
+*.diagsession

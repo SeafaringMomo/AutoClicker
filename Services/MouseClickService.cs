@@ -57,6 +57,7 @@ namespace AutoClicker.Services
         {
             _targetX = x;
             _targetY = y;
+            Logger.Log($"设置悬停目标坐标: ({x}, {y})", LogLevel.Info, "MouseClick");
         }
 
         /// <summary>
@@ -72,6 +73,7 @@ namespace AutoClicker.Services
             _offsetX = offsetX;
             _offsetY = offsetY;
             _usePostMessage = usePostMessage;
+            Logger.Log($"设置窗口树目标: hwnd=0x{hwnd:X8}, offset=({offsetX}, {offsetY}), usePostMessage={usePostMessage}", LogLevel.Info, "MouseClick");
         }
 
         /// <summary>
@@ -102,6 +104,7 @@ namespace AutoClicker.Services
             _isRunning = true;
             _cts = new CancellationTokenSource();
             _clickTask = Task.Run(() => ClickLoop(_cts.Token));
+            Logger.Log($"连点服务启动: Mode={Mode}, Button={Button}, Interval={IntervalMs}ms", LogLevel.Info, "MouseClick");
         }
 
         /// <summary>
@@ -113,6 +116,7 @@ namespace AutoClicker.Services
 
             _cts?.Cancel();
             _isRunning = false;
+            Logger.Log("连点服务停止", LogLevel.Info, "MouseClick");
         }
 
         // ========== 内部实现 ==========
@@ -130,7 +134,14 @@ namespace AutoClicker.Services
                     }
                     else
                     {
-                        PerformClickWindow(_targetHwnd, _offsetX, _offsetY);
+                        if (_targetHwnd == IntPtr.Zero)
+                        {
+                            Logger.Log("窗口树模式下目标句柄为空，跳过点击", LogLevel.Warning, "MouseClick");
+                        }
+                        else
+                        {
+                            PerformClickWindow(_targetHwnd, _offsetX, _offsetY);
+                        }
                     }
 
                     count++;
@@ -159,6 +170,10 @@ namespace AutoClicker.Services
             catch (OperationCanceledException)
             {
                 // 正常停止
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException(ex, "ClickLoop");
             }
             finally
             {
@@ -206,10 +221,10 @@ namespace AutoClicker.Services
         {
             (uint downMsg, uint upMsg, IntPtr wParam) = Button switch
             {
-                MouseButton.Left => (Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, (IntPtr)Win32.MK_LBUTTON),
-                MouseButton.Right => (Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP, (IntPtr)Win32.MK_RBUTTON),
-                MouseButton.Middle => (Win32.WM_MBUTTONDOWN, Win32.WM_MBUTTONUP, (IntPtr)Win32.MK_MBUTTON),
-                _ => (Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, (IntPtr)Win32.MK_LBUTTON)
+                MouseButton.Left => ((uint)Win32.WM_LBUTTONDOWN, (uint)Win32.WM_LBUTTONUP, (IntPtr)Win32.MK_LBUTTON),
+                MouseButton.Right => ((uint)Win32.WM_RBUTTONDOWN, (uint)Win32.WM_RBUTTONUP, (IntPtr)Win32.MK_RBUTTON),
+                MouseButton.Middle => ((uint)Win32.WM_MBUTTONDOWN, (uint)Win32.WM_MBUTTONUP, (IntPtr)Win32.MK_MBUTTON),
+                _ => ((uint)Win32.WM_LBUTTONDOWN, (uint)Win32.WM_LBUTTONUP, (IntPtr)Win32.MK_LBUTTON)
             };
 
             IntPtr lParam = Win32.MakeLParam(offsetX, offsetY);
