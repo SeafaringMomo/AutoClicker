@@ -1,0 +1,67 @@
+<Window x:Class="AutoClicker.FloatingRecordingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="录制中" Height="80" Width="220"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        MouseLeftButtonDown="OnMouseLeftButtonDown">
+
+    <Border Background="#E8212530" CornerRadius="8" BorderBrush="#FF3498DB" BorderThickness="1">
+        <Grid Margin="10,6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 标题行 -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="&#x1F534;" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0">
+                    <TextBlock.Triggers>
+                        <EventTrigger RoutedEvent="TextBlock.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                     From="1.0" To="0.2" Duration="0:0:0.7"
+                                                     AutoReverse="True" RepeatBehavior="Forever"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </TextBlock.Triggers>
+                </TextBlock>
+                <TextBlock Grid.Column="1" x:Name="TxtStatus" Text="录制中" FontSize="13" FontWeight="Bold" Foreground="#FFECF0F1" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="&#x1F4DE;" FontSize="10" Foreground="#FFBDC3C7" VerticalAlignment="Center" ToolTip="可拖动"/>
+            </Grid>
+
+            <!-- 数据行 -->
+            <Grid Grid.Row="1" Margin="0,4,0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="时长 " FontSize="11" Foreground="#FFBDC3C7"/>
+                    <TextBlock x:Name="TxtElapsed" Text="00:00" FontSize="12" FontWeight="Bold" Foreground="#FF3498DB" FontFamily="Consolas"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="步骤 " FontSize="11" Foreground="#FFBDC3C7"/>
+                    <TextBlock x:Name="TxtActions" Text="0" FontSize="12" FontWeight="Bold" Foreground="#FF2ECC71" FontFamily="Consolas"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 提示行 -->
+            <TextBlock Grid.Row="2" x:Name="TxtHint" Text="F9 停止  |  F10 暂停  |  Ctrl+Esc 强制停止"
+                       FontSize="9" Foreground="#FF95A5A6" HorizontalAlignment="Center"/>
+        </Grid>
+    </Border>
+</Window>

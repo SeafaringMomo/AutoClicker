@@ -28,14 +28,34 @@ namespace AutoClicker.Services
         /// <summary>鼠标按钮</summary>
         public MouseButton Button { get; set; } = MouseButton.Left;
 
-        /// <summary>连点模式</summary>
-        public ClickMode Mode { get; set; } = ClickMode.HoverPosition;
+        /// <summary>单点连点的定位方式</summary>
+        public SingleClickPositioning Positioning { get; set; } = SingleClickPositioning.HoverPosition;
 
-        // --- HoverPosition 模式参数 ---
-        private int _targetX;
-        private int _targetY;
+       // --- HoverPosition 模式参数 ---
+       private int _targetX;
+       private int _targetY;
+       private bool _hasHoverTarget; // 不依赖坐标值判断有效性，避免 (0,0) 被误判
 
-        // --- WindowTree 模式参数 ---
+        // 是否有有效的悬停目标
+        public bool HasHoverTarget => _hasHoverTarget;
+
+        /// <summary>
+        /// 获取悬停目标坐标
+        /// </summary>
+        public (int X, int Y) GetHoverTarget() => (_targetX, _targetY);
+
+        /// <summary>
+        /// 清除悬停目标
+        /// </summary>
+        public void ClearHoverTarget()
+        {
+            _targetX = 0;
+            _targetY = 0;
+            _hasHoverTarget = false;
+            Logger.Log("已清除悬停目标", LogLevel.Info, "MouseClick");
+        }
+
+       // --- WindowTree 模式参数 ---
         private IntPtr _targetHwnd;
         private int _offsetX;
         private int _offsetY;
@@ -57,6 +77,7 @@ namespace AutoClicker.Services
         {
             _targetX = x;
             _targetY = y;
+            _hasHoverTarget = true;
             Logger.Log($"设置悬停目标坐标: ({x}, {y})", LogLevel.Info, "MouseClick");
         }
 
@@ -104,7 +125,7 @@ namespace AutoClicker.Services
             _isRunning = true;
             _cts = new CancellationTokenSource();
             _clickTask = Task.Run(() => ClickLoop(_cts.Token));
-            Logger.Log($"连点服务启动: Mode={Mode}, Button={Button}, Interval={IntervalMs}ms", LogLevel.Info, "MouseClick");
+            Logger.Log($"连点服务启动: Positioning={Positioning}, Button={Button}, Interval={IntervalMs}ms", LogLevel.Info, "MouseClick");
         }
 
         /// <summary>
@@ -128,7 +149,7 @@ namespace AutoClicker.Services
             {
                 while (!token.IsCancellationRequested)
                 {
-                    if (Mode == ClickMode.HoverPosition)
+                    if (Positioning == SingleClickPositioning.HoverPosition)
                     {
                         PerformClickScreen(_targetX, _targetY);
                     }
