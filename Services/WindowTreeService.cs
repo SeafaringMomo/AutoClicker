@@ -1,175 +1,256 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using AutoClicker.Models;
 using AutoClicker.Native;
-using AutoClicker.Services;
 
 namespace AutoClicker.Services
 {
-    /// <summary>
-    /// 窗口树服务 — 枚举所有顶层窗口及其子窗口
-    /// 用于模式2 (窗口树定位), 用户可以在树中选择目标控件
-    /// </summary>
     public class WindowTreeService
     {
         /// <summary>
-        /// 获取所有可见顶层窗口
+        /// v1.5.0 新增: 按条件查找顶层窗口
+        /// 所有条件都为空时返回 IntPtr.Zero
         /// </summary>
-        public List<WindowTreeNode> GetTopLevelWindows()
+        /// <param name="titlePattern">标题通配符模式 (支持 *)，空字符串表示不限制</param>
+        /// <param name="className">类名精确匹配，空字符串表示不限制</param>
+        /// <param name="processName">进程名匹配 (如 notepad)，空字符串表示不限制</param>
+        /// <returns>第一个匹配窗口的句柄；未找到返回 IntPtr.Zero</returns>
+        public IntPtr FindWindow(string titlePattern, string className, string processName)
         {
-            var windows = new List<WindowTreeNode>();
-            Win32.EnumWindows((hWnd, lParam) =>
+            // 三条件都为空 — 无意义
+            if (string.IsNullOrEmpty(titlePattern) 
+                && string.IsNullOrEmpty(className) 
+                && string.IsNullOrEmpty(processName))
             {
-                if (Win32.IsWindowVisible(hWnd))
-                {
-                    var node = BuildNode(hWnd);
-                    windows.Add(node);
-                }
-                return true;
-            }, IntPtr.Zero);
-
-            Logger.Log($"枚举顶层窗口完成，共 {windows.Count} 个", LogLevel.Info, "WindowTree");
-            return windows;
-        }
-
-        /// <summary>
-        /// 递归获取指定窗口的所有子窗口
-        /// </summary>
-        public List<WindowTreeNode> GetChildWindows(IntPtr parentHwnd, int maxDepth = 10)
-        {
-            var children = new List<WindowTreeNode>();
-            CollectChildren(parentHwnd, children, 0, maxDepth);
-            Logger.Log($"获取子窗口: parent=0x{parentHwnd:X8}, count={children.Count}", LogLevel.Info, "WindowTree");
-            return children;
-        }
-
-        /// <summary>
-        /// 构建完整的窗口树 (顶层 + 递归子窗口)
-        /// 注意: 只展开2层, 避免太深
-        /// </summary>
-        public List<WindowTreeNode> BuildWindowTree(int maxDepth = 3)
-        {
-            var result = new List<WindowTreeNode>();
-            var topWindows = GetTopLevelWindows();
-
-            foreach (var top in topWindows)
-            {
-                // 只展开有标题的或重要的窗口
-                if (!string.IsNullOrEmpty(top.Title) ||
-                    top.ClassName.Contains("Button", StringComparison.OrdinalIgnoreCase) ||
-                    top.ClassName == "Shell_TrayWnd") // 任务栏
-                {
-                    BuildTreeRecursive(top, 0, maxDepth);
-                    result.Add(top);
-                }
+                return IntPtr.Zero;
             }
 
-            Logger.Log($"构建窗口树完成: 根节点 {result.Count} 个, 最大深度 {maxDepth}", LogLevel.Info, "WindowTree");
+            IntPtr found = IntPtr.Zero;
+            Win32.EnumWindows((h, _) =>
+            {
+                if (!Win32.IsWindowVisible(h)) return true;
+
+                var title = GetWindowTitle(h);
+                var cls = GetClassName(h);
+
+                // 标题通配符匹配 (* 匹配任意字符)
+                if (!string.IsNullOrEmpty(titlePattern) && !MatchWildcard(title, titlePattern))
+                    return true;
+                // 类名精确匹配
+                if (!string.IsNullOrEmpty(className) && cls != className)
+                    return true;
+                // 进程名匹配
+                if (!string.IsNullOrEmpty(processName))
+                {
+                    Win32.GetWindowThreadProcessId(h, out uint pid);
+                    try
+                    {
+                        var proc = Process.GetProcessById((int)pid);
+                        if (!proc.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                    catch
+                    {
+                        return true;
+                    }
+                }
+
+                found = h;
+                return false;  // 停止枚举
+            }, IntPtr.Zero);
+            return found;
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 通配符匹配 (* 匹配任意字符，? 匹配单字符)
+        /// 例如 MatchWildcard("订单详情 - #ORD123", "订单*") = true
+        /// </summary>
+        public static bool MatchWildcard(string input, string pattern)
+        {
+            if (string.IsNullOrEmpty(pattern)) return true;
+            if (string.IsNullOrEmpty(input)) return false;
+
+            // 将通配符转换为正则: * → .*, ? → ., 其他字符转义
+            var regex = "^" + Regex.Escape(pattern)
+                .Replace("\\*", ".*")
+                .Replace("\\?", ".") + "$";
+            return Regex.IsMatch(input, regex, RegexOptions.IgnoreCase);
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 枚举指定父窗口下指定类名的所有子控件
+        /// </summary>
+        public List<IntPtr> FindChildControls(IntPtr parentHwnd, string className)
+        {
+            var result = new List<IntPtr>();
+            if (parentHwnd == IntPtr.Zero) return result;
+
+            Win32.EnumChildWindows(parentHwnd, (h, _) =>
+            {
+                if (!string.IsNullOrEmpty(className))
+                {
+                    var cls = GetClassName(h);
+                    if (cls != className) return true;
+                }
+                result.Add(h);
+                return true;
+            }, IntPtr.Zero);
             return result;
         }
 
         /// <summary>
-        /// 获取鼠标下的窗口及父窗口链
+        /// v1.5.0 新增: 获取子控件文本 (WM_GETTEXT)
         /// </summary>
-        public WindowTreeNode? GetWindowInfoUnderCursor()
+        public string GetControlText(IntPtr hwnd)
         {
-            Win32.GetCursorPos(out var pt);
-            IntPtr hwnd = Win32.WindowFromPoint(pt);
-            if (hwnd == IntPtr.Zero)
-            {
-                Logger.Log("鼠标下无窗口", LogLevel.Warning, "WindowTree");
-                return null;
-            }
-
-            // 获取顶层窗口
-            IntPtr rootHwnd = Win32.GetAncestor(hwnd, Win32.GA_ROOT);
-            var root = BuildNode(rootHwnd);
-
-            // 从 root 向下构建到当前句柄的路径
-            var path = new List<IntPtr>();
-            IntPtr current = hwnd;
-            while (current != IntPtr.Zero && current != rootHwnd)
-            {
-                path.Add(current);
-                current = Win32.GetParent(current);
-            }
-            path.Reverse();
-
-            var node = root;
-            foreach (var h in path)
-            {
-                var child = BuildNode(h);
-                child.Children = GetImmediateChildren(h);
-                node.Children.Add(child);
-                node = child;
-            }
-
-            Logger.Log($"获取鼠标下窗口信息: hwnd=0x{hwnd:X8}, root=0x{rootHwnd:X8}, path节点数={path.Count}", LogLevel.Info, "WindowTree");
-            return root;
+            if (hwnd == IntPtr.Zero) return string.Empty;
+            var sb = new StringBuilder(4096);
+            // WM_GETTEXT = 0x000D
+            Win32.SendMessage(hwnd, 0x000D, (IntPtr)4096, sb);
+            return sb.ToString();
         }
 
         /// <summary>
-        /// 根据句柄构建单棵节点
+        /// v1.5.0 新增: 拼接所有子控件文本
         /// </summary>
-        public WindowTreeNode BuildNode(IntPtr hWnd)
+        public string GetAllChildrenText(IntPtr parentHwnd)
         {
-            Win32.GetWindowThreadProcessId(hWnd, out uint pid);
-            uint style = Win32.GetWindowLong(hWnd, Win32.GWL_STYLE);
+            if (parentHwnd == IntPtr.Zero) return string.Empty;
+            var sb = new StringBuilder();
 
-            var node = new WindowTreeNode
+            Win32.EnumChildWindows(parentHwnd, (h, _) =>
             {
-                Handle = hWnd,
-                ClassName = Win32.GetClassNameStr(hWnd),
-                Title = Win32.GetWindowTextStr(hWnd),
-                ProcessId = pid,
-                IsVisible = Win32.IsWindowVisible(hWnd),
-                IsEnabled = Win32.IsWindowEnabled(hWnd),
-                StyleInfo = $"0x{style:X8}",
-            };
+                var text = GetControlText(h);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    if (sb.Length > 0) sb.Append(" | ");
+                    sb.Append(text);
+                }
+                return true;
+            }, IntPtr.Zero);
 
-            Logger.Log($"构建窗口节点: hwnd=0x{hWnd:X8}, class={node.ClassName}, title={node.Title}, visible={node.IsVisible}", LogLevel.Debug, "WindowTree");
-            return node;
+            return sb.ToString();
         }
 
-        // ===== 内部方法 =====
-
-        private void BuildTreeRecursive(WindowTreeNode parent, int depth, int maxDepth)
+        /// <summary>
+        /// v1.5.0 新增: 获取指定类名子控件序号对应的文本
+        /// </summary>
+        public string GetChildTextByIndex(IntPtr parentHwnd, string className, int index)
         {
-            if (depth >= maxDepth) return;
+            var children = FindChildControls(parentHwnd, className);
+            if (index < 0 || index >= children.Count) return string.Empty;
+            return GetControlText(children[index]);
+        }
 
-            var children = GetImmediateChildren(parent.Handle);
-            parent.Children = children;
-
-            foreach (var child in children)
+        public List<WindowTreeNode> BuildWindowTree(int maxDepth = 3)
+        {
+            var roots = new List<WindowTreeNode>();
+            Win32.EnumWindows((hWnd, lParam) =>
             {
-                BuildTreeRecursive(child, depth + 1, maxDepth);
+                if (Win32.IsWindowVisible(hWnd))
+                {
+                    var node = BuildNode(hWnd, 0, maxDepth);
+                    if (node != null)
+                        roots.Add(node);
+                }
+                return true;
+            }, IntPtr.Zero);
+            return roots;
+        }
+
+        public WindowTreeNode? BuildNode(IntPtr hWnd, int currentDepth = 0, int maxDepth = 3)
+        {
+            try
+            {
+                if (currentDepth > maxDepth)
+                    return null;
+
+                var node = new WindowTreeNode
+                {
+                    Handle = hWnd,
+                    ClassName = GetClassName(hWnd),
+                    Title = GetWindowTitle(hWnd),
+                    ProcessId = GetProcessId(hWnd),
+                    IsVisible = Win32.IsWindowVisible(hWnd),
+                    IsEnabled = Win32.IsWindowEnabled(hWnd),
+                    StyleInfo = GetStyleInfo(hWnd)
+                };
+
+                Win32.EnumChildWindows(hWnd, (childHwnd, lParam) =>
+                {
+                    var childNode = BuildNode(childHwnd, currentDepth + 1, maxDepth);
+                    if (childNode != null)
+                        node.Children.Add(childNode);
+                    return true;
+                }, IntPtr.Zero);
+
+                return node;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException(ex, "BuildNode");
+                return null;
             }
         }
 
-        private List<WindowTreeNode> GetImmediateChildren(IntPtr parentHwnd)
+        private string GetClassName(IntPtr hWnd)
         {
-            var children = new List<WindowTreeNode>();
-            Win32.EnumChildWindows(parentHwnd, (hWnd, lParam) =>
-            {
-                children.Add(BuildNode(hWnd));
-                return true;
-            }, IntPtr.Zero);
-            return children;
+            var sb = new StringBuilder(256);
+            Win32.GetClassName(hWnd, sb, sb.Capacity);
+            return sb.ToString();
         }
 
-        private void CollectChildren(IntPtr parentHwnd, List<WindowTreeNode> result, int depth, int maxDepth)
+        /// <summary>v1.5.0: 改为 public 供 WorkflowPlayer 使用</summary>
+        public string GetWindowTitle(IntPtr hWnd)
         {
-            if (depth >= maxDepth) return;
+            var length = Win32.GetWindowTextLength(hWnd);
+            if (length == 0) return string.Empty;
+            var sb = new StringBuilder(length + 1);
+            Win32.GetWindowText(hWnd, sb, sb.Capacity);
+            return sb.ToString();
+        }
 
-            Win32.EnumChildWindows(parentHwnd, (hWnd, lParam) =>
+        private uint GetProcessId(IntPtr hWnd)
+        {
+            Win32.GetWindowThreadProcessId(hWnd, out uint pid);
+            return pid;
+        }
+
+        private string GetStyleInfo(IntPtr hWnd)
+        {
+            try
             {
-                var node = BuildNode(hWnd);
-                result.Add(node);
-                CollectChildren(hWnd, result, depth + 1, maxDepth);
-                return true;
-            }, IntPtr.Zero);
+                var style = Win32.GetWindowLong(hWnd, Win32.GWL_STYLE);
+                var exStyle = Win32.GetWindowLong(hWnd, Win32.GWL_EXSTYLE);
+                return $"Style:0x{style:X8} ExStyle:0x{exStyle:X8}";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// 递归查找指定句柄节点，并回溯路径上的所有祖先节点 (用于自动展开路径)
+        /// 返回 true 表示找到，并通过 expandAction 回调逐级展开父节点
+        /// </summary>
+        public bool ExpandPathRecursive(WindowTreeNode node, IntPtr targetHandle, Action<WindowTreeNode> expandAction)
+        {
+            if (node == null) return false;
+            if (node.Handle == targetHandle) return true;
+
+            foreach (var child in node.Children)
+            {
+                if (ExpandPathRecursive(child, targetHandle, expandAction))
+                {
+                    expandAction(node);
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

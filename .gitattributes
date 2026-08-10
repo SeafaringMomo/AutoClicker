@@ -1,0 +1,14 @@
+# 代码文件统一仓库LF，本地Windows自动CRLF
+*.cs     text eol=lf
+*.xaml   text eol=lf
+*.csproj text eol=lf
+*.md     text eol=lf
+*.txt    text eol=lf
+*.gitignore text eol=lf
+LICENSE  text eol=lf
+
+# 二进制文件不转换
+*.png    binary
+*.jpg    binary
+*.exe    binary
+*.dll    binary

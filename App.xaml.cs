@@ -5,7 +5,7 @@ using AutoClicker.Services;
 
 namespace AutoClicker
 {
-    public partial class App : Application
+    public partial class App : System.Windows.Application
     {
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -14,10 +14,10 @@ namespace AutoClicker
             // 应用程序级异常处理
             this.DispatcherUnhandledException += (sender, args) =>
             {
-                Logger.LogException(args.Exception, "UI线程未处理异常");
-                args.Handled = true;
-                MessageBox.Show($"发生未处理的错误:\n{args.Exception.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            };
+               Logger.LogException(args.Exception, "UI线程未处理异常");
+               args.Handled = true;
+                System.Windows.MessageBox.Show($"发生未处理的错误:\n{args.Exception.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+           };
 
             AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
             {
@@ -34,6 +34,8 @@ namespace AutoClicker
             };
 
             Logger.Log("=== AutoClicker 应用程序启动 ===", LogLevel.Info, "App");
+            Logger.LogSystemInfo();
+            Logger.CleanupOldLogs();
         }
 
         protected override void OnExit(ExitEventArgs e)

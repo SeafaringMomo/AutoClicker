@@ -1,46 +1,144 @@
-# 🖱 连点器 AutoClicker
+# AutoClicker v1.5.0
 
-Windows 桌面鼠标连点工具，WPF (.NET 8) 实现。
+Windows 桌面鼠标连点工具，WPF (.NET 8) 实现，严格遵循 MVVM 架构 (View / ViewModel / Model / Service 彻底分离)。
+
+v1.4.0 新增**流程点击**功能 — 录制鼠标点击 + 键盘输入序列，保存为可重复使用的"流程副本"，支持循环播放、倍速、编辑、导入导出。原"模式1 悬停定位 / 模式2 窗口树定位"合并为一级 Tab「单点连点」下的两个子定位方式。
+
+v1.5.0 新增**智能动作 (Smart Actions)** — 在流程中插入 `WaitForWindow` (等待窗口出现) 和 `ExtractText` (提取文本到变量) 两类智能动作，通过 `EnableSmartActions` 开关控制是否启用。关闭时纯固定坐标回放，完全兼容 v1.4.0；启用后可监测点击打开的页面、提取页面信息供后续步骤模板引用，失败时可弹窗让用户选择重试/跳过/中止。
 
 ## 功能特性
 
-- **双模式连点**
-  - 模式1：悬停定位 — 鼠标移到目标位置后启动连点
-  - 模式2：窗口树定位 — 选择目标窗口控件进行后台连点 (抢票推荐)
-- **全局热键**：F6 一键启停，无需切回应用窗口
-- **灵活间隔**：1ms ~ 5000ms，滑块+输入框双控制
+### 单点连点 (原模式1 + 模式2 合并)
+
+- **悬停定位** — 鼠标移到目标位置后启动连点
+- **窗口树定位** — 选择目标窗口控件进行后台连点 (抢票推荐)
+- 一级 Tab 内置 SegmentedControl 切换两种定位方式
 - **三键支持**：左键 / 右键 / 中键
+- **灵活间隔**：1ms ~ 5000ms，滑块+输入框双控制
 - **PostMessage 模式**：异步发送消息，不阻塞，适合抢票场景
-- **日志系统**：完整的运行日志记录 (AutoClicker.log)，支持 Debug/Info/Warning/Error 级别
+
+### 流程点击 (v1.4.0 新增)
+
+- **键鼠录制**：基于 Win32 低级钩子 (`WH_MOUSE_LL` / `WH_KEYBOARD_LL`) 全局捕获操作
+- **文本合并**：连续字符自动合并为 `KeyboardText` (500ms 静默期触发刷新)，功能键单独记录为 `KeyPress`
+- **可选鼠标移动录制**：默认不录制纯移动事件，可勾选开启
+- **流程库**：`workflows.json` 单文件持久化所有流程，支持单流程 JSON 导出/导入
+- **循环播放**：可指定循环次数 + 循环间隔
+- **倍速播放**：1x / 2x / 5x 三档 (延迟按倍率缩短)
+- **基础编辑**：录制完成后可上移/下移/删除/编辑单步动作
+- **录制悬浮窗**：录制时弹出 220×80 半透明置顶悬浮窗 (红点闪烁 + 时长 + 步骤数)，可拖动到任意位置
+- **回放技术**：`SendInput` API (兼容性优于 `mouse_event`/`keybd_event`)，UNICODE 文本输入
+
+### 智能动作 (v1.5.0 新增)
+
+智能动作用于在固定坐标回放的基础上，按需加入"窗口监测"与"信息提取"能力，解决"点击后页面未打开就执行下一步"的问题。
+
+- **EnableSmartActions 开关** — 流程库子页底部复选框，关闭 (默认) 时 `WaitForWindow`/`ExtractText` 动作直接跳过，纯固定坐标回放；启用后按动作定义执行
+- **WaitForWindow** — 等待指定窗口出现再继续；支持按标题通配符 / 类名 / 进程名匹配，可设超时和失败处理策略
+- **ExtractText** — 从已打开的窗口提取文本到变量，供后续步骤模板引用 `${varName}` 引用
+- **变量模板** — 任何动作的文本字段都可用 `${varName}` 引用前序 ExtractText 提取的变量
+- **失败处理** — `Prompt` 弹窗让用户选择 / `Abort` 中止流程 / `Skip` 跳过 / `Retry` 无限重试
+- **测试匹配/测试提取** — 编辑对话框可实时测试窗口匹配条件与文本提取效果，无需保存流程
+- **窗口拾取** — 一键拾取当前前台窗口的标题/类名/进程名填充匹配条件
+- **向后兼容** — 旧 `workflows.json` 文件无需迁移，新增字段都有默认值
+
+### 通用
+
+- **全局热键**：F6 启停 (单点连点模式启停/流程播放启停)，F7 捕获坐标，F8 拾取窗口，F9 录制启停，F10 录制暂停，**Ctrl+Esc 强制停止一切运行**
+- **日志系统**：按天 + 按大小 (5MB) 双滚动，自动清理 30 天前日志，支持级别过滤，启动时自动记录系统环境信息
 - **异常处理**：全局未捕获异常捕获与记录，程序崩溃时自动保存日志
+- **配置持久化**：所有设置自动保存 (模式、子定位方式、树高度、热键、间隔、偏移、PostMessage、自动捕获、流程库默认参数)
+- **配置导入/导出**：JSON 格式备份与恢复
+- **窗口树过滤筛选**：按类名/标题/句柄快速筛选
+- **多显示器适配**：捕获坐标区分屏幕序号
+- **句柄失效自动清理**：目标窗口关闭后自动清空选中项并提示
 
 ## 技术栈
 
 | 组件 | 技术 |
 |------|------|
 | 框架 | WPF (.NET 8) |
-| 鼠标操作 | Win32 API (mouse_event / SendMessage / PostMessage) |
+| 架构 | 严格 MVVM (View / ViewModel / Model / Service 四层分离 + 依赖抽象) |
+| 单点连点 - 鼠标操作 | Win32 API (mouse_event / SendMessage / PostMessage) |
+| 流程录制 - 全局钩子 | Win32 低级钩子 (WH_MOUSE_LL=14 / WH_KEYBOARD_LL=13) |
+| 流程回放 - 输入模拟 | Win32 SendInput API (UNICODE 文本 + 虚拟键码) |
 | 窗口枚举 | EnumWindows / EnumChildWindows |
 | 全局热键 | RegisterHotKey / UnregisterHotKey |
-| 日志 | 自研轻量级日志服务 (文件+调试输出) |
+| 日志 | 自研轻量级日志服务 (按天 + 按大小双滚动 + 自动清理 + 级别过滤) |
+| 配置存储 | JSON (System.Text.Json) |
+| 流程存储 | JSON (workflows.json + .bak 自动备份) |
+| MVVM 工具 | CommunityToolkit.Mvvm (引用，可拓展使用 Source Generator) |
+
+## MVVM 架构
+
+### 分层职责
+
+| 层 | 命名空间 | 职责 |
+|----|----------|------|
+| View | `AutoClicker` (MainWindow.xaml / .cs, FloatingRecordingWindow.xaml / .cs) | 纯视图层：XAML 声明式绑定 + 不可回避的视图事件转发 (TreeView 选中、GridSplitter 拖拽) + 悬浮窗创建/关闭 |
+| ViewModel | `AutoClicker.ViewModels` | 状态与命令，**不直接依赖** `MessageBox`/`Process.Start`/`Clipboard`/`Application.Current.Dispatcher` |
+| Model | `AutoClicker.Models` | 纯数据模型 (枚举、配置、节点、流程、全局易失状态) — **不含逻辑、不含 VM、不含 Converter** |
+| Service | `AutoClicker.Services` | 业务服务 (鼠标、热键、窗口树、配置、日志、流程录制/播放/存储) + 抽象接口 (`IDialogService`/`IProcessService`/`IClipboardService`/`IDispatcherService`/`IWorkflowRecorder`/`IWorkflowPlayer`/`IWorkflowStorage`) |
+| Converter | `AutoClicker.Converters` | XAML 值转换器 (与 Model/VM 分离) |
+| Helper | `AutoClicker.Helpers` | 公共工具类 (虚拟键码转换) |
+| Native | `AutoClicker.Native` | Win32 P/Invoke 声明 |
+
+### 严格 MVVM 实践要点
+
+1. **MainWindow.xaml.cs** 仅做：构造 VM、转发 `TreeView.SelectedItemChanged` / `GridSplitter.DragDelta`、响应 VM 的视图层请求事件 (`RequestHideForPick` / `RequestShowAfterPick` / `RequestShowFloatingWindow` / `RequestHideFloatingWindow`)。
+2. **VM 零 UI 依赖**：所有 `MessageBox.Show` → `IDialogService`；`Process.Start` → `IProcessService`；`Clipboard.SetText` → `IClipboardService`；`Application.Current.Dispatcher` → `IDispatcherService`。便于单元测试替换 Mock。
+3. **流程服务抽象**：`IWorkflowRecorder` / `IWorkflowPlayer` / `IWorkflowStorage` 通过构造函数注入到 `WorkflowRecorderViewModel` / `WorkflowLibraryViewModel`，便于替换实现或 Mock 测试。
+4. **Model 层不含逻辑**：`ClickModels.cs` 仅含数据模型与枚举，`Workflow.cs` 仅含流程数据结构。
+5. **视图层关注点通过事件回传**：`PickWindow` 需要最小化主窗口时，VM 通过 `RequestHideForPick` 事件通知 View；录制开始/停止时通过 `RequestShowFloatingWindow`/`RequestHideFloatingWindow` 事件通知 View 创建/关闭悬浮窗。
 
 ## 项目结构
 
 ```
 AutoClicker/
-├── AutoClicker.csproj          # 项目配置
-├── App.xaml / App.xaml.cs      # 应用入口 (含全局异常处理)
-├── MainWindow.xaml             # 主界面 XAML
-├── MainWindow.xaml.cs          # 主界面逻辑 (完善的空值检查与异常处理)
+├── AutoClicker.csproj              # 项目配置
+├── App.xaml / App.xaml.cs          # 应用入口 (含全局异常处理 + 启动时 LogSystemInfo + CleanupOldLogs)
+├── MainWindow.xaml                 # 主界面 XAML (640x720, 一级Tab + SegmentedControl + 流程子页 + 智能监测开关)
+├── MainWindow.xaml.cs              # 主界面逻辑 (视图事件转发 + 悬浮窗管理)
+├── WorkflowActionEditWindow.xaml   # v1.5.0 流程动作编辑对话框 (含智能动作字段 + 测试匹配/提取)
+├── WorkflowActionEditWindow.xaml.cs# 编辑对话框 code-behind (订阅 VM 事件关闭窗口)
+├── FloatingRecordingWindow.xaml    # 录制悬浮窗 (220x80 半透明置顶)
+├── FloatingRecordingWindow.xaml.cs # 悬浮窗逻辑 (200ms 刷新 + 拖动支持)
 ├── Native/
-│   └── Win32.cs                # Win32 API 声明
+│   └── Win32.cs                    # Win32 API 声明 (含低级钩子 + SendInput)
 ├── Models/
-│   └── ClickModels.cs          # 数据模型 (枚举/窗口树节点)
+│   ├── ClickModels.cs              # 纯数据模型 (枚举/WindowTreeNode/AppSettings/HotkeyConfig/AppGlobalState)
+│   └── Workflow.cs                 # 流程数据模型 (WorkflowActionType / WorkflowAction / Workflow / WorkflowLibrary)
+├── Helpers/
+│   └── VirtualKeyHelper.cs         # 虚拟键码/修饰键字符串转换
+├── Converters/
+│   └── Converters.cs               # IValueConverter 集合 (含 StringToBrush / InverseBoolToVisibility)
 ├── Services/
-│   ├── Logger.cs               # 日志服务 (新增)
-│   ├── MouseClickService.cs    # 鼠标连点引擎
-│   ├── WindowTreeService.cs    # 窗口树枚举服务
-│   └── GlobalHotkeyService.cs  # 全局热键服务
+│   ├── Logger.cs                   # 日志服务 (按天 + 按大小滚动)
+│   ├── MouseClickService.cs        # 鼠标连点引擎 (单点连点)
+│   ├── WindowTreeService.cs        # 窗口树枚举服务
+│   ├── GlobalHotkeyService.cs      # 全局热键服务 (F6-F10 + Ctrl+Esc)
+│   ├── SettingsService.cs          # 配置持久化服务
+│   ├── WorkflowRecorder.cs         # 流程录制服务 (低级钩子)
+│   ├── WorkflowPlayer.cs           # 流程回放服务 (SendInput)
+│   ├── WorkflowStorageService.cs   # 流程库持久化 (JSON + .bak)
+│   ├── IWorkflowServices.cs        # 流程服务抽象接口 (IWorkflowRecorder/IWorkflowPlayer/IWorkflowStorage)
+│   ├── IDialogService.cs           # 对话框抽象 + WPF 实现
+│   ├── IProcessService.cs          # 进程启动抽象 + 实现
+│   ├── IClipboardService.cs        # 剪贴板抽象 + 实现
+│   └── IDispatcherService.cs       # UI 调度抽象 + 实现
+├── ViewModels/
+│   ├── ViewModelBase.cs            # INotifyPropertyChanged 基类
+│   ├── RelayCommand.cs             # ICommand 实现 (含泛型版本)
+│   ├── MainViewModel.cs            # 主 VM (一级Tab切换/热键路由/启停/强制停止)
+│   ├── HoverModeViewModel.cs       # 悬停定位 VM
+│   ├── WindowTreeModeViewModel.cs  # 窗口树定位 VM
+│   ├── WorkflowModeViewModel.cs    # 流程点击主 VM (二级Tab: 新建/使用)
+│   ├── WorkflowRecorderViewModel.cs# 流程录制 VM (录制控制 + 动作编辑 + 插入智能动作)
+│   ├── WorkflowLibraryViewModel.cs # 流程库 VM (列表 + 详情 + 播放控制 + EnableSmartActions 开关 + 智能动作事件转发)
+│   ├── WorkflowActionViewModel.cs  # 流程动作 VM (颜色/图标/显示文本 + IsSmartAction 标记)
+│   ├── WorkflowActionEditViewModel.cs # v1.5.0 动作编辑 VM (统一编辑所有类型 + 测试匹配/提取)
+│   ├── WindowTreeNodeWrapper.cs    # TreeView 节点包装器
+│   └── SettingsViewModel.cs        # 设置/帮助菜单 VM
 └── README.md
 ```
 
@@ -49,13 +147,19 @@ AutoClicker/
 ### 前置条件
 
 - Windows 10/11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (在 .NET 9 SDK 上亦可构建)
 
 ### 构建
 
 ```bash
 dotnet build -c Release
 ```
+
+> 若遇到 `CS2012: 无法打开 ... AutoClicker.dll 进行写入` 错误 (VBCSCompiler 服务器文件锁)，可附加 `-p:UseSharedCompilation=false` 关闭共享编译：
+>
+> ```bash
+> dotnet build -c Release -p:UseSharedCompilation=false
+> ```
 
 ### 运行
 
@@ -75,62 +179,437 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 
 ## 使用说明
 
-### 模式1：悬停定位
+### 界面布局 (v1.4.0 重构)
 
-1. 将鼠标移到目标位置
-2. 点击 **"📍 捕获当前鼠标位置"** (或直接按 F6，自动捕获当前位置)
-3. 按 **F6** 启动连点
-4. 再按 **F6** 停止
+主窗口尺寸 640×720，结构如下：
 
-### 模式2：窗口树定位 (抢票推荐)
+```
+┌──────────────────────────────────────────────────┐
+│ [📍 单点连点] [🎬 流程点击]      [☰设置][❓帮助] │ ← 一级 Tab
+├──────────────────────────────────────────────────┤
+│  ┌─ SegmentedControl ─┐                          │
+│  │ [悬停定位][窗口树定位]│  (仅单点连点页显示)    │
+│  └────────────────────┘                          │
+│  ┌─ SegmentedControl ─┐                          │
+│  │ [📝新建流程][▶使用] │  (仅流程点击页显示)     │
+│  └────────────────────┘                          │
+│                                                   │
+│              主内容区 (子页切换)                  │
+├──────────────────────────────────────────────────┤
+│ 鼠标按键: [左][右][中]    间隔(ms): [滑块][输入]  │ ← 单点连点底部参数
+├──────────────────────────────────────────────────┤
+│         [▶ 开始连点 (F6)] [⏹ 停止连点 (F6)]       │ ← 单点连点启停按钮
+├──────────────────────────────────────────────────┤
+│ ● 就绪 | 已点击: 0 次 | 运行时长: 00:00:00       │ ← 状态栏 (动态)
+└──────────────────────────────────────────────────┘
+```
 
-1. 选择 **"模式2: 窗口树定位"**
-2. 点击 **"🔄 刷新窗口列表"** 查看窗口树
-   - 或点击 **"🎯 十字准星选窗"** — 应用最小化 3 秒后捕获鼠标下的窗口
+### 单点连点 - 悬停定位
+
+1. 选择「单点连点」一级 Tab → 「悬停定位」子方式
+2. 将鼠标移到目标位置
+3. 点击 "捕获当前位置 (F7)" 或直接按 F7
+4. 可选：勾选 "捕获后自动开始连点"
+5. 按 F6 启动连点
+
+> 坐标支持复制/粘贴，可手动输入 XY 定位 (格式 `X,Y`)
+
+### 单点连点 - 窗口树定位 (抢票推荐)
+
+1. 选择「单点连点」一级 Tab → 「窗口树定位」子方式
+2. 点击 "刷新窗口列表" 查看窗口树
+   - 或点击 "十字拾取窗口 (F8)" — 应用最小化 3 秒后捕获鼠标下的窗口
 3. 在树中展开并选择目标控件 (如提交按钮)
+   - 顶部筛选框可按类名/标题/句柄快速筛选
+   - GridSplitter 可拖拽调节树区域高度 (100-400px，自动记忆)
 4. 可设置客户区偏移坐标 (X, Y)
-5. 勾选 **"使用 PostMessage"** (默认开启，异步发送，适合抢票)
-6. 按 **F6** 启动连点
+5. 勾选 "使用 PostMessage (异步, 抢票推荐)" (默认开启)
+6. 按 F6 启动连点
+
+### 流程点击 - 新建流程
+
+1. 选择「流程点击」一级 Tab → 「新建流程」二级 Tab
+2. 输入流程名称 (必填) 和描述 (可选)
+3. 可选：勾选 "录制鼠标移动" (默认不录制)
+4. 点击 "开始录制 (F9)" 或按 F9 — 屏幕右上角弹出半透明悬浮窗显示录制状态
+   - 录制中所有鼠标点击、键盘输入会被捕获
+   - 文本输入会自动合并 (500ms 静默期触发刷新)
+   - 功能键 (Enter/Tab/ESC 等) 单独记录
+   - F9 再次按下停止录制
+   - F10 暂停/恢复录制
+5. 录制完成后可在动作列表中：
+   - **上移/下移** 调整动作顺序
+   - **编辑** 修改动作参数 (坐标/文本/按键码/延迟)
+   - **删除** 移除某一步
+6. 点击 "保存流程" — 流程写入 `workflows.json`
+
+### 流程点击 - 使用流程
+
+1. 选择「流程点击」一级 Tab → 「使用流程」二级 Tab
+2. 工具栏：刷新列表 / 导入流程 / 导出选中 / 编辑流程 (切回新建页加载) / 删除流程
+3. 左侧列表点选一个流程 → 右侧显示详情和动作预览
+4. 设置播放参数：
+   - 循环次数 (默认 1)
+   - 循环间隔毫秒 (默认 1000)
+   - 播放速度 1x / 2x / 5x (延迟按倍率缩短)
+   - **启用智能监测** (v1.5.0 新增)：勾选后 `WaitForWindow`/`ExtractText` 动作才会执行；不勾选时纯固定坐标回放 (默认)
+5. 点击 "播放 (F6)" 启动 — 状态栏显示「运行中 第N步/共N步 | 循环 N/M」
+6. 可暂停/停止，或按 Ctrl+Esc 强制停止
+
+### 流程点击 - 插入智能动作 (v1.5.0 新增)
+
+在「新建流程」子页的动作列表下方，除原有的 上移/下移/编辑/删除 外，新增三个插入按钮：
+
+1. **⏳ 等待窗口** — 插入 `WaitForWindow` 动作
+   - 在编辑对话框中填写匹配条件 (标题通配符 / 类名 / 进程名，至少一项)
+   - 可点击「拾取当前窗口」按钮自动填充当前前台窗口的标题/类名/进程名
+   - 设置超时 (默认 5000ms) 与失败处理策略 (默认 Prompt)
+   - 可点击「测试匹配」立即验证当前条件能否匹配到窗口
+2. **📋 提取信息** — 插入 `ExtractText` 动作
+   - 选择文本来源 (窗口标题 / 子控件文本 / 所有子控件合并 / Edit 控件值)
+   - 指定输出变量名 (如 `orderId`)
+   - 可点击「测试提取」预览提取结果
+3. **⏱ 插入等待** — 插入固定延时动作 (非智能动作)
+
+后续动作可在 Text 等字段中使用 `${变量名}` 引用提取的变量，回放时自动替换。
+
+> **重要**：智能动作必须勾选「启用智能监测」才会执行，否则在回放时直接跳过。这一设计保证纯固定坐标场景下流程库的稳定性，避免误触发窗口查找逻辑。
 
 ### 间隔设置
 
-- 用滑块快速调整，或在输入框精确输入
+- 用滑块快速调整，或在输入框精确输入 (自动 clamp 到 1-5000)
+- 支持滚轮微调
 - 抢票建议: 50-200ms (太快可能被检测)
 - 游戏场景: 10-100ms
 
+### 通用设置菜单 (顶部菜单栏 "设置")
+
+- 自定义热键 - 修改 F6-F10 + Ctrl+Esc 绑定，冲突自动检测标红
+- 打开日志文件夹 - 在资源管理器中打开当日日志
+- 导出配置 - 备份当前所有设置为 JSON
+- 导入配置 - 恢复之前导出的配置
+- 重置所有设置 - 恢复出厂默认值
+
+### 帮助菜单 (顶部菜单栏 "帮助")
+
+- 操作教程 - 打开 GitHub Wiki
+- 关于软件 - 版本信息与功能列表
+- GitHub - 项目主页
+
+### 热键说明
+
+| 热键 | 作用域 | 说明 |
+|------|--------|------|
+| F6 | 全局 | 单点连点模式：启停连点；流程点击模式：启停流程播放 |
+| F7 | 仅单点连点-悬停定位 | 捕获当前鼠标坐标 |
+| F8 | 仅单点连点-窗口树定位 | 十字准星拾取目标窗口 |
+| F9 | 仅流程点击-新建流程 | 启动/停止录制 (钩子内拦截，不传递给业务程序) |
+| F10 | 仅流程点击-新建流程 | 暂停/恢复录制 |
+| Ctrl+Esc | 全局 | **强制停止一切运行** (连点 + 录制 + 播放) |
+
+> 热键冲突提示：非当前模式下按 F7/F8/F9/F10 会弹窗提示切换模式
+> 全局热键开关：通用设置中可一键禁用所有热键 (游戏/直播时)
+
+### 流程动作类型
+
+录制时根据操作类型自动分类，列表中以颜色区分：
+
+| 类型 | 图标 | 背景色 | 说明 |
+|------|------|--------|------|
+| MouseClick | 🖱 | 浅蓝 #E3F2FD | 鼠标点击 (左/右/中键 + 坐标) |
+| MouseMove | ↗ | 浅青 #E0F7FA | 鼠标移动 (可选录制) |
+| KeyboardText | ⌨ | 浅绿 #E8F5E9 | 文本输入 (连续字符自动合并) |
+| KeyPress | ⌨ | 浅橙 #FFF3E0 | 单键按下 (Enter/Tab/ESC 等功能键) |
+| Wait | ⏱ | 浅灰 #ECEFF1 | 显式等待 |
+| WaitForWindow | ⏳ | 浅紫 #F3E5F5 | v1.5.0 智能动作：等待窗口出现 |
+| ExtractText | 📋 | 浅黄 #FFFDE7 | v1.5.0 智能动作：提取文本到变量 |
+
+### 智能动作详细参数 (v1.5.0)
+
+**WaitForWindow** — 等待目标窗口出现
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| WindowTitlePattern | string | "" | 窗口标题通配符 (`*` 匹配任意字符, `?` 匹配单字符) |
+| WindowClassName | string | "" | 窗口类名 (精确匹配) |
+| ProcessName | string | "" | 进程名 (不区分大小写) |
+| TimeoutMs | int | 5000 | 超时毫秒数 (超时触发 OnFailure 策略) |
+| ActivateWindow | bool | true | 找到窗口后是否激活置前 |
+| OnFailure | FailureAction | Prompt | 超时失败处理：Prompt/Abort/Skip/Retry |
+
+**ExtractText** — 从窗口提取文本到变量
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| TextSource | TextSource | WindowTitle | 文本来源：WindowTitle/ChildControlText/AllChildrenText/EditControlValue |
+| TargetControlClass | string | "" | 目标控件类名 (用于 ChildControlText/EditControlValue) |
+| TargetControlIndex | int | 0 | 目标控件序号 (同类控件中第几个) |
+| OutputVariable | string | "" | 输出变量名，后续步骤用 `${varName}` 引用 |
+| OnFailure | FailureAction | Prompt | 提取失败处理 |
+
+**变量模板语法**：在后续动作的 Text 等字段中使用 `${varName}`，回放时自动替换为变量值。例如 `ExtractText` 提取了 `orderId`，后续 `KeyboardText` 的 Text 设为 `订单号: ${orderId}` 即可拼接输出。
+
+**失败处理策略 (OnFailure)**：
+
+| 策略 | 行为 |
+|------|------|
+| Prompt | 弹窗让用户选择 重试 / 跳过 / 中止流程 (默认) |
+| Abort | 直接中止整个流程 |
+| Skip | 跳过该动作继续下一步 |
+| Retry | 无限重试直到成功 (慎用，可能死循环) |
+
 ### 日志查看
 
-程序运行目录下会生成 `AutoClicker.log`，包含：
-- 程序启动/退出记录
-- 模式切换、按钮选择、间隔调整等用户操作
-- 窗口枚举、热键注册、连点启停等核心流程
-- 错误与异常堆栈 (Error 级别)
+程序运行目录下会按天生成 `AutoClicker_YYYYMMDD.log`，单文件超过 5MB 时自动切分到 `AutoClicker_YYYYMMDD_001.log`、`_002.log` 等。日志内容包含：
 
-可用文本编辑器打开查看，或使用 `tail -f AutoClicker.log` 实时监控 (Git Bash/WSL)。
+- **启动信息**：系统环境 (OS/.NET 版本/CPU 核数/机器名/用户名)、配置加载、热键注册
+- **运行流程**：模式切换、按钮选择、间隔调整、窗口枚举、热键触发、连点启停、流程录制/播放
+- **用户操作**：所有按钮点击、坐标捕获、窗口拾取、流程保存/删除
+- **异常记录**：完整异常堆栈 + 内层异常链 (` ---> ` 分隔)，最多 10 层深度
 
-## 两种模式对比
+日志级别按严重程度排序：`Debug (0)` < `Info (1)` < `Warning (2)` < `Error (3)`。可通过 `Logger.MinimumLevel` 属性运行时调整过滤级别。
+
+#### 自动清理
+
+程序启动时自动检查并删除 30 天前的日志文件 (按文件名中的日期判定)，每 6 小时最多执行一次避免频繁 IO。可通过 `Logger.CleanupOldLogs(force: true)` 强制立即清理。
+
+#### 日志 API 示例
+
+```csharp
+// 基础日志
+Logger.Log("连点已启动", LogLevel.Info, "MainVM");
+Logger.Log("热键冲突", LogLevel.Warning, "Hotkey");
+
+// 异常记录 (自动展开内层异常链)
+try { /* ... */ }
+catch (Exception ex)
+{
+    Logger.LogException(ex, "CapturePosition");
+}
+
+// 系统信息 (启动时调用一次)
+Logger.LogSystemInfo();
+
+// 列出所有日志文件
+var files = Logger.ListLogFiles();
+foreach (var f in files) Console.WriteLine($"{f.Name} ({f.Length} bytes)");
+
+// 运行时调整级别 (例如仅记录警告及以上)
+Logger.MinimumLevel = LogLevel.Warning;
+```
+
+可用文本编辑器打开查看，或使用 `tail -f AutoClicker_$(date +%Y%m%d).log` 实时监控 (Git Bash/WSL)。
+
+### 流程存储格式
+
+所有流程保存在程序运行目录下的 `workflows.json`：
+
+```json
+{
+  "Version": 1,
+  "Workflows": [
+    {
+      "Id": "f3a2b1c8...",
+      "Name": "示例流程",
+      "Description": "登录网站",
+      "CreatedAt": "2026-07-20T10:00:00",
+      "UpdatedAt": "2026-07-20T10:30:00",
+      "EnableSmartActions": true,
+      "Actions": [
+        { "Index": 1, "Type": "MouseClick", "Button": "Left", "X": 100, "Y": 200, "DelayMs": 0 },
+        { "Index": 2, "Type": "WaitForWindow", "WindowTitlePattern": "登录成功*", "TimeoutMs": 5000, "OnFailure": "Prompt", "ActivateWindow": true, "DelayMs": 0 },
+        { "Index": 3, "Type": "ExtractText", "TextSource": "WindowTitle", "OutputVariable": "pageTitle", "OnFailure": "Skip", "DelayMs": 0 },
+        { "Index": 4, "Type": "KeyboardText", "Text": "当前页: ${pageTitle}", "DelayMs": 50 }
+      ],
+      "DefaultLoopCount": 1,
+      "DefaultIntervalMs": 0,
+      "RecordMouseMove": false
+    }
+  ]
+}
+```
+
+保存时自动创建 `.bak` 备份。单个流程可通过 "导出" 按钮导出为独立 JSON 文件，"导入" 时会重新生成 ID 避免冲突。`EnableSmartActions` 字段控制是否启用智能动作；旧版 (v1.4.0) workflows.json 不含该字段，反序列化时默认为 `false`，纯固定坐标回放完全兼容。
+
+## 单点连点两种定位方式对比
 
 | | 悬停定位 | 窗口树定位 |
 |---|---------|-----------|
 | 原理 | mouse_event 模拟鼠标操作 | SendMessage/PostMessage 发送窗口消息 |
-| 是否需要鼠标在目标位置 | ✅ 是 | ❌ 否，可以后台 |
+| 是否需要鼠标在目标位置 | 是 | 否，可以后台 |
 | 适用场景 | 游戏、简单界面 | 抢票、自动化、后台操作 |
 | 应用兼容性 | 几乎所有应用 | 部分应用不响应消息方式 |
-| 推荐发送方式 | — | PostMessage (异步) |
+| 推荐发送方式 | - | PostMessage (异步) |
 
 ## 更新日志
 
-### v1.1.0 (当前版本)
-- ✅ 新增完整日志系统 (Logger.cs)，支持文件输出与多级别日志
-- ✅ 新增全局异常处理 (App.xaml.cs)，捕获 UI/非UI 线程未处理异常
-- ✅ 修复 CS0266 编译错误 (Win32 消息常量 uint/int 隐式转换)
-- ✅ 修复所有潜在 NullReferenceException (UI 元素空值检查、句柄判空)
-- ✅ 全事件处理器添加 try/catch 与日志记录
-- ✅ 窗口树服务、热键服务、连点服务全面接入日志
-### v1.1.1 (2026-07-17)
-- ✅ 修复 MainWindow.xaml.cs 语法错误 (多余的闭合大括号导致 CS8803/CS0106 编译错误)
-### v1.1.2 (2026-07-17)
-- ✅ 修复 NullReferenceException: 事件处理器在 InitializeComponent 期间触发时服务未初始化 (为 _clickService 等服务添加空值检查)
+### v1.5.0 (2026-07-21) - 智能动作 (Smart Actions)
+
+- **新增智能动作功能**：在流程中插入 `WaitForWindow` (等待窗口出现) 和 `ExtractText` (提取文本到变量) 两类智能动作
+  - **EnableSmartActions 开关**：流程库子页底部复选框，关闭时 (默认) 智能动作直接跳过，纯固定坐标回放完全兼容 v1.4.0
+  - **WaitForWindow**：按标题通配符 (`*`/`?`) / 类名 / 进程名匹配目标窗口，可设超时与失败处理策略；支持激活置前最小化窗口
+  - **ExtractText**：4 种文本来源 (WindowTitle / ChildControlText / AllChildrenText / EditControlValue)，提取到命名变量供后续步骤模板引用
+  - **变量模板**：`${varName}` 语法在 Text 等字段中引用前序 ExtractText 提取的变量，回放时正则替换
+  - **失败处理**：4 种策略 (Prompt 弹窗选择 / Abort 中止 / Skip 跳过 / Retry 无限重试)；Prompt 通过 `TaskCompletionSource<FailureChoice>` 跨线程等待 UI 响应
+  - **WorkflowContext**：每次循环独立变量字典，自动隔离不同循环迭代
+- **新增动作编辑对话框**：`WorkflowActionEditWindow.xaml` + `WorkflowActionEditViewModel.cs`
+  - 统一编辑所有动作类型 (鼠标/键盘/等待/智能动作)
+  - ComboBox 选择失败处理策略 (替代 RadioButton，减小对话框尺寸)
+  - 按动作类型动态显示/隐藏相关字段
+  - 「测试匹配」/「测试提取」按钮实时验证窗口条件与文本提取效果，无需保存流程
+  - 「拾取当前窗口」按钮自动填充当前前台窗口的标题/类名/进程名
+- **扩展 Models/Workflow.cs**：
+  - `WorkflowActionType` 新增 `WaitForWindow` / `ExtractText`
+  - 新增 `FailureAction` 枚举 (Prompt/Abort/Skip/Retry)
+  - 新增 `TextSource` 枚举 (WindowTitle/ChildControlText/AllChildrenText/EditControlValue)
+  - `WorkflowAction` 新增字段：`WindowTitlePattern` / `WindowClassName` / `ProcessName` / `TimeoutMs=5000` / `ActivateWindow=true` / `OnFailure=Prompt` / `OutputVariable` / `TextSource=WindowTitle` / `TargetControlClass` / `TargetControlIndex=0`
+  - `Workflow` 新增 `EnableSmartActions=false` 字段
+  - `DisplayText` getter 支持 WaitForWindow/ExtractText 摘要，Workflow 在 EnableSmartActions=true 时显示 "★智能" 后缀
+- **扩展 Services/WindowTreeService.cs**：
+  - 新增 `FindWindow(titlePattern, className, processName)` — EnumWindows + 通配符/进程名匹配
+  - 新增 `MatchWildcard(input, pattern)` — `*`→`.*` / `?`→`.` 正则转换
+  - 新增 `FindChildControls(parentHwnd, className)` / `GetControlText(hwnd)` (WM_GETTEXT) / `GetAllChildrenText(parentHwnd)` / `GetChildTextByIndex(parentHwnd, className, index)`
+  - `GetWindowTitle` 改为 public 供 Player/VM 复用
+- **扩展 Native/Win32.cs**：
+  - 新增 `SendMessage` 重载 (StringBuilder lParam，用于 WM_GETTEXT)
+  - 新增 `SetForegroundWindow` / `ShowWindow` / `IsIconic` / `IsZoomed` 及常量 `SW_RESTORE=9` / `SW_SHOW=5` / `SW_SHOWNORMAL=1`
+- **重写 Services/WorkflowPlayer.cs**：
+  - 注入 `WindowTreeService` 依赖
+  - 智能动作跳过逻辑：`!workflow.EnableSmartActions && IsSmartAction(type)` 直接 continue
+  - `ExecuteWaitForWindow` — 轮询查找窗口 (200ms 间隔) + 超时 + OnFailure 策略分发
+  - `ExecuteExtractText` — 按 TextSource 提取文本 + `WorkflowContext.Set(varName, value)`
+  - `HandleSmartFailureAsync` — 用 `TaskCompletionSource<FailureChoice>` 异步等待 UI 决策
+  - 新增 `VariableExtracted` / `SmartActionFailed` 事件供 VM 订阅
+  - 新增 `WorkflowAbortException` 用于 Abort 策略中断播放循环
+- **扩展 Services/IWorkflowServices.cs**：
+  - 新增 `FailureChoice` 枚举 (Retry/Skip/Abort)
+  - 新增 `WorkflowContext` 类 — Set/Get/Has/ResolveTemplate (正则 `${var}` 替换) /GetAll
+  - `IWorkflowPlayer` 新增 `VariableExtracted` / `SmartActionFailed` 事件
+- **扩展 ViewModels/WorkflowActionViewModel.cs**：新增 WaitForWindow (浅紫) / ExtractText (浅黄) 背景色与图标 (⏳/📋)；新增 `IsSmartAction` 属性
+- **新增 ViewModels/WorkflowActionEditViewModel.cs**：统一编辑 VM + 测试匹配/提取命令 + 拾取窗口命令 + 类型驱动的可见性属性
+- **扩展 ViewModels/WorkflowRecorderViewModel.cs**：
+  - 注入 `WindowTreeService`
+  - 新增 `InsertWaitForWindowCommand` / `InsertExtractTextCommand` / `InsertWaitCommand`
+  - `EditAction` 改用新的 `WorkflowActionEditWindow` (移除旧的 ShowInputDialog)
+- **扩展 ViewModels/WorkflowLibraryViewModel.cs**：
+  - 新增 `EnableSmartActions` 属性 (双向绑定复选框)
+  - `PlaySelected` 同步开关到 `workflow.EnableSmartActions`
+  - `SyncFromWorkflow(w)` 在切换选中流程时同步开关状态
+  - 订阅 `_player.VariableExtracted` / `SmartActionFailed` 事件并转发为 public 事件
+- **扩展 ViewModels/MainViewModel.cs**：
+  - 传 `_windowTreeService` 到 WorkflowRecorderViewModel
+  - 订阅 `libraryVM.VariableExtracted` / `SmartActionFailed`
+  - `OnVariableExtracted` 更新 `LastExtractedVariable` 状态栏提示
+  - `OnSmartActionFailed` 调用 `ShowSmartFailureDialog` 显示 3 按钮对话框 (重试/跳过/中止)
+- **扩展 Services/IDialogService.cs**：新增 `ShowCustomDialog(title, message, buttonLabels, defaultIndex)` — 用 Window 动态构建多按钮对话框
+- **扩展 MainWindow.xaml**：
+  - 标题更新为 v1.5.0
+  - 录制页工具栏新增三个插入按钮 (⏳ 等待窗口 / 📋 提取信息 / ⏱ 插入等待) + 分隔线
+  - 流程库播放参数区改为 StackPanel 双行布局，第二行新增「🧠 启用智能监测」复选框
+- **向后兼容**：所有新增字段都有默认值，旧 workflows.json 无需迁移即可加载；默认 `EnableSmartActions=false` 保证不改变 v1.4.0 行为
+
+### v1.4.0 (2026-07-20) - 流程点击功能 + UI 重构
+
+- **新增流程点击功能**：录制鼠标点击 + 键盘输入序列，保存为可重复使用的流程副本
+  - 录制：基于 Win32 低级钩子 (`WH_MOUSE_LL=14` / `WH_KEYBOARD_LL=13`) 全局捕获
+  - 文本合并：连续字符 500ms 内合并为 `KeyboardText`，功能键单独记录为 `KeyPress`
+  - 录制时拦截 F9/F10 不传递给业务程序
+  - 回放：基于 `SendInput` API，支持 UNICODE 文本输入，兼容性优于 mouse_event
+  - 倍速播放：1x/2x/5x (延迟按倍率缩短)
+  - 循环播放：可指定次数 + 循环间隔
+  - 基础编辑：录制完成后可上移/下移/删除/编辑单步动作
+  - 持久化：`workflows.json` 单文件 + `.bak` 备份 + 单流程 JSON 导入导出
+- **新增录制悬浮窗**：220×80 半透明置顶窗口，红点闪烁 + 实时时长 + 步骤数，可拖动到任意位置
+- **UI 重构**：
+  - 主菜单合并：原"模式1 悬停定位 / 模式2 窗口树定位"两个一级 Tab 合并为「单点连点」一级 Tab，内部用 SegmentedControl 切换子定位方式
+  - 新增「流程点击」一级 Tab，内部二级 Tab 切换「新建流程」/「使用流程」
+  - 主窗口尺寸 640×720 (原 520×680)
+  - 流程库子页：左列表 + 右详情双栏布局，中间可拖拽 GridSplitter 调节宽度
+  - 动作列表按类型颜色区分 (浅蓝/浅青/浅绿/浅橙/浅灰)
+  - 流程库空状态显示提示图标
+  - 录制控制按钮按状态切换：未录制显示「开始录制」、录制中显示「暂停」、暂停中显示「继续」
+- **新增热键**：F9 录制启停、F10 录制暂停、**Ctrl+Esc 强制停止一切运行** (连点 + 录制 + 播放)
+- **新增数据模型**：`Models/Workflow.cs` 含 `WorkflowActionType` 枚举、`WorkflowAction` / `Workflow` / `WorkflowLibrary` 类
+- **新增服务接口**：`IWorkflowRecorder` / `IWorkflowPlayer` / `IWorkflowStorage` 三个流程服务抽象
+- **新增 ViewModel**：`WorkflowModeViewModel` / `WorkflowRecorderViewModel` / `WorkflowLibraryViewModel` / `WorkflowActionViewModel`
+- **新增 Converter**：`StringToBrushConverter` (hex 字符串转 Brush 用于动作背景色)、`InverseBoolToVisibilityConverter`
+- **扩展 Native/Win32.cs**：新增低级钩子常量与委托 (`WH_MOUSE_LL`/`WH_KEYBOARD_LL`/`LowLevelHookProc`/`SetWindowsHookEx`/`UnhookWindowsHookEx`/`CallNextHookEx`)、`SendInput` API、`INPUT`/`MOUSEINPUT`/`KEYBDINPUT`/`MSLLHOOKSTRUCT`/`KBDLLHOOKSTRUCT` 结构体、`SI_MOUSEEVENTF_*` uint 版本常量 (与原 int 版本 `MOUSEEVENTF_*` 区分以兼容 MouseClickService)
+- **扩展 MouseClickService**：`ClickMode Mode` 属性改为 `SingleClickPositioning Positioning`，配合一级 Tab 合并
+- **扩展 GlobalHotkeyService.Initialize**：注册 F9/F10 + Ctrl+Esc 默认热键
+- **扩展 MainViewModel**：
+  - 新增 `WorkflowVM` 属性 (WorkflowModeViewModel)
+  - 新增 `CurrentPositioning` 属性 (SingleClickPositioning)
+  - 新增 `UptimeText` 属性 + 1s DispatcherTimer
+  - `OnHotkeyPressed` 路由：F6 根据当前 Tab 决定单点启停或流程播放启停；F9/F10 仅在流程点击模式生效；Ctrl+Esc 调用 `ForceStopAll()` 停止连点 + 录制 + 播放
+  - 新增 `TogglePositioningCommand`、`ForceStopAll()` 方法
+  - 依赖注入新增 `IWorkflowRecorder` / `IWorkflowPlayer` / `IWorkflowStorage`
+  - `UpdateStatusText` 分模式显示：单点模式显示定位方式 + 状态；流程模式显示录制时长/步数或播放进度
+- **扩展 ClickModels.cs**：
+  - `ClickMode` 枚举从 `(HoverPosition, WindowTree)` 改为 `(SingleClick, Workflow)`
+  - 新增 `SingleClickPositioning` 枚举 `(HoverPosition, WindowTree)`
+  - `HotkeyId` 新增 `RecordStartStop=4` / `RecordPause=5` / `ForceStop=6`
+  - `HotkeyConfig` 新增 `DefaultRecordStartStop` (F9) / `DefaultRecordPause` (F10) / `DefaultForceStop` (Ctrl+Esc)
+  - `AppSettings` 新增 `LastPositioning` / `HotkeyRecordStartStop` / `HotkeyRecordPause` / `HotkeyForceStop` / `DefaultWorkflowLoopCount` / `DefaultWorkflowIntervalMs` / `DefaultWorkflowSpeed`，`WindowWidth`/`WindowHeight` 默认改为 640/720
+
+### v1.3.1 (2026-07-20) - 运行时 Bug 修复 + 日志系统增强
+- **关键 Bug 修复**：`MainWindow.xaml` 中 `TreeViewItemStyle` 通过 `StaticResource` 引用 `ExpanderToggleButtonStyle`，但后者定义在它之后，违反 WPF StaticResource 必须先定义后引用规则 — 启动切换到模式2时抛出 `XamlParseException: 无法找到名为"ExpanderToggleButtonStyle"的资源`，导致 TreeView 无法渲染。已调整两个 Style 的顺序，`ExpanderToggleButtonStyle` 移到 `TreeViewItemStyle` 之前
+- **热键重复注册修复**：`GlobalHotkeyService.Initialize` 中先调用三次 `RegisterHotkey` (已通过 Win32 `RegisterHotKey` 注册)，又调用 `RegisterAll()` 再次注册相同热键，产生 3 条 "热键注册失败 (可能被占用)" 警告。已删除 `Initialize` 中冗余的 `RegisterAll()` 调用，并在 `RegisterSingle` 增加 `IsRegistered` 守卫防止重入
+- **日志系统增强**：
+  - 按大小滚动：单文件超过 5MB 自动切分到 `AutoClicker_YYYYMMDD_001.log`、`_002.log` 等序号文件
+  - 自动清理：启动时自动删除 30 天前的日志文件 (按文件名日期判定)，每 6 小时最多执行一次
+  - 级别过滤：新增 `Logger.MinimumLevel` 属性，运行时可调整 (默认 Debug 全部记录)
+  - 异常堆栈完整化：`LogException` 自动展开内层异常链 (` ---> ` 分隔)，最多 10 层深度
+  - 系统环境信息：新增 `Logger.LogSystemInfo()` 方法，启动时自动记录 OS / .NET 版本 / 机器名 / 用户名 / CPU 核数 / 路径等诊断信息
+  - 日志文件枚举：新增 `Logger.ListLogFiles()` 方法，按修改时间倒序返回所有日志文件
+  - `App.OnStartup` 自动调用 `LogSystemInfo()` 与 `CleanupOldLogs()`
+
+### v1.3.0 (2026-07-20) - MVVM 严格化重构
+- **架构拆分**：消除 `Models/ClickModels.cs` 单文件架构 (原 1230+ 行混杂 Model/VM/Converter)
+  - `Models/ClickModels.cs` 仅保留纯数据模型
+  - 新建 `ViewModels/` 目录，拆分为 7 个独立文件 (ViewModelBase / RelayCommand / MainViewModel / HoverModeViewModel / WindowTreeModeViewModel / SettingsViewModel / WindowTreeNodeWrapper)
+  - 新建 `Converters/Converters.cs` 收纳 7 个 IValueConverter，与 Model/VM 解耦
+  - 新建 `Helpers/VirtualKeyHelper.cs` 统一虚拟键码与修饰键字符串转换 (消除 HotkeyConfig 与 GlobalHotkeyService 各 100+ 行重复 switch)
+- **VM 零 UI 依赖**：所有 ViewModel 不再直接调用 `MessageBox.Show` / `Process.Start` / `Clipboard.SetText` / `Application.Current.Dispatcher`，改用 `IDialogService` / `IProcessService` / `IClipboardService` / `IDispatcherService` 抽象
+- **MainViewModel 提供依赖注入构造函数**：所有服务通过构造参数注入，便于单元测试与替换实现
+- **MainWindow.xaml.cs 严格视图层**：`PickWindow` 的窗口最小化/置顶逻辑从 VM 迁回 View，通过 VM 的 `RequestHideForPick`/`RequestShowAfterPick` 事件解耦
+- **AppGlobalState 职责收敛**：移除与 AppSettings 重复的 `CurrentMode`/`HotkeysEnabled`/`WindowWidth`/`WindowHeight`/`TreePanelHeight` 字段，仅保留运行时易失状态 (`IsClicking`/`StartTime`/`Uptime`)，消除状态不一致风险
+- **Bug 修复**：
+  - `MouseClickService.HasHoverTarget` 不再用 `_targetX != 0 || _targetY != 0` 判断，避免捕获屏幕原点 (0,0) 被误判无效；改用 `_hasHoverTarget` 标志位
+  - `WindowTreeModeViewModel.PickWindow` 删除死代码 `var node = _windowTreeService.BuildNode(hwnd);` (结果从未使用)
+- **日志按天滚动**：`Logger` 实际实现 `AutoClicker_YYYYMMDD.log` 文件按天滚动 (此前 README 已声称但未实现)，跨天自动切换文件
+- **冗余清理**：移除 `WindowTreeService.ExpandPathToWindow` (与 `ExpandPathRecursive` 逻辑重复)
+- **配置项越界保护**：`MainViewModel.IntervalMs` setter 自动 clamp 到 1-5000 范围
+- **粘贴坐标校验**：`HoverModeViewModel.PastePosition` 增加格式与空值校验，失败时友好提示
+- **项目配置修正**：`<UseWindowsForms>` 改为 `false` (README v1.1.3 已声明移除 WinForms 依赖，但 csproj 仍开启导致命名空间冲突)
+- 关于对话框版本号更新至 v1.3.0
+
+### v1.2.0 (2026-07-17) - MVVM 重构版
+- 全面 MVVM 重构：View/ViewModel/Model 彻底分离，MainWindow.xaml.cs 仅保留视图事件转发
+- 导航栏优化：RadioButton 双模式快捷切换 + Menu 下拉承载通用设置/帮助
+- 热键作用域细化：F6 全局启停、F7 仅悬停模式捕获、F8 仅窗口树模式拾取；冲突友好提示
+- 全局热键开关：通用设置下拉增加"全局热键开关"复选框
+- TreeView 持久化：GridSplitter 拖拽高度 (100-400px) 自动保存，重启恢复
+- 一键收起/展开树：工具栏新增快捷按钮
+- 设置分层：底部常驻运行时实时参数 (鼠标键、间隔)，菜单下拉存放静态全局配置 (热键、日志、主题)
+- 间隔滑块增强：输入框双向绑定，支持手动输入 + 滚轮微调
+- 新增 AppGlobalState 单例：全局运行状态多 VM 共享
+- 新增 SettingsService：VM 加载时读取本地 JSON，关闭时自动保存
+- 解耦热键服务与 VM：GlobalHotkeyService 只抛事件，MainWindow 中转分发到对应 VM
+- 窗口树过滤：工具栏增加筛选输入框，支持按控件名/类名/句柄快速筛选
+- 坐标复制粘贴：坐标文本框支持复制，新增"粘贴坐标"按钮
+- 多显示器适配：捕获坐标区分屏幕序号，多屏场景不偏移
+- 运行校验弹窗：模式1未捕获坐标按 F6/启动 -> 提示"请先捕获目标坐标"；模式2未选控件启动 -> 提示"请在窗口树选择目标控件"
+- 句柄失效自动清理：模式2选中的窗口关闭后自动清空选中项并提示
+- 运行中切换模式自动停止：避免多线程同时发送鼠标消息冲突
+- 配置导入/导出：JSON 格式备份与恢复
+- 状态栏扩容：当前激活模式、热键是否可用、运行时长
+
+### v1.1.0 - v1.1.3
+- 新增完整日志系统 (Logger.cs)，支持文件输出与多级别日志
+- 新增全局异常处理 (App.xaml.cs)，捕获 UI/非UI 线程未处理异常
+- 修复 CS0266 / CS0104 / CS0103 / CS0234 / CS0117 / CS8603 / CS8803 等编译错误
+- 修复 NullReferenceException (UI 元素空值检查、服务初始化期间事件触发的空值检查)
+- 全事件处理器添加 try/catch 与日志记录
 
 ### v1.0.0
 - 初始版本：双模式连点、全局热键、窗口树选择、PostMessage 支持
