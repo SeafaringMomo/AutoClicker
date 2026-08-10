@@ -145,7 +145,7 @@ namespace AutoClicker.ViewModels
         private void ShowAbout()
         {
             _dialog.ShowInformation(
-                "AutoClicker v1.3.1\n\nWPF 连点器工具\n基于 .NET 8 构建\n\n功能:\n- 悬停定位模式\n- 窗口树定位模式\n- 全局热键支持\n- PostMessage 异步发送\n- 配置导入/导出\n- 按天+按大小滚动日志\n- 30 天日志自动清理",
+                "AutoClicker v1.5.0\n\nWPF 连点器工具\n基于 .NET 8 构建\n\n功能:\n- 单点连点 (悬停定位 / 窗口树定位)\n- 流程点击 (录制 / 回放 / 循环 / 倍速)\n- v1.5.0 智能动作 (WaitForWindow / ExtractText + 变量模板)\n- 全局热键 (F6-F10 + Ctrl+Esc 强制停止)\n- PostMessage 异步发送 (抢票推荐)\n- 配置导入/导出\n- 按天+按大小滚动日志\n- 30 天日志自动清理",
                 "关于 AutoClicker");
         }
 

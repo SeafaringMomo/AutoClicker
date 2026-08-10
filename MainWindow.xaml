@@ -7,7 +7,7 @@
         xmlns:vm="clr-namespace:AutoClicker.ViewModels"
         xmlns:conv="clr-namespace:AutoClicker.Converters"
         mc:Ignorable="d"
-        Title="AutoClicker v1.4.0" Height="720" Width="640"
+        Title="AutoClicker v1.5.0" Height="720" Width="640"
         MinWidth="600" MinHeight="680"
         WindowStartupLocation="CenterScreen"
         Topmost="True"
@@ -618,6 +618,26 @@
                                         CommandParameter="{Binding WorkflowVM.RecorderVM.SelectedAction}"
                                         Padding="10,5" Margin="0,0,6,4"
                                         Background="#E74C3C" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="12"/>
+
+                                <!-- v1.5.0: 智能动作插入分隔 -->
+                                <Border Width="1" Background="#D0D0D0" Margin="6,2" />
+
+                                <Button Content="&#x23F3; 等待窗口"
+                                        Command="{Binding WorkflowVM.RecorderVM.InsertWaitForWindowCommand}"
+                                        Padding="10,5" Margin="0,0,6,4"
+                                        Background="#9B59B6" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="12"
+                                        ToolTip="插入 WaitForWindow 智能动作: 等待指定窗口出现再继续 (需启用智能监测)"/>
+                                <Button Content="&#x1F4CB; 提取信息"
+                                        Command="{Binding WorkflowVM.RecorderVM.InsertExtractTextCommand}"
+                                        Padding="10,5" Margin="0,0,6,4"
+                                        Background="#F39C12" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="12"
+                                        ToolTip="插入 ExtractText 智能动作: 从窗口提取文本到变量 (供后续步骤模板引用)"/>
+                                <Button Content="&#x23F1; 插入等待"
+                                        Command="{Binding WorkflowVM.RecorderVM.InsertWaitCommand}"
+                                        Padding="10,5" Margin="0,0,6,4"
+                                        Background="#7F8C8D" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="12"
+                                        ToolTip="插入固定延时动作"/>
+
                                 <TextBlock Text="提示: 录制期间会弹出半透明悬浮窗显示状态，可拖动到任意位置。"
                                            FontSize="11" Foreground="#888" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </WrapPanel>
@@ -741,38 +761,46 @@
 
                         <!-- 播放参数 -->
                         <Border Grid.Row="2" Background="#F8F9FA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="12,10" Margin="0,0,0,8">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" Text="循环次数:" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"/>
-                                <TextBox Grid.Column="1" Text="{Binding WorkflowVM.LibraryVM.LoopCount, UpdateSourceTrigger=PropertyChanged}" Width="50" Padding="4" VerticalAlignment="Center" FontSize="12"/>
+                                    <TextBlock Grid.Column="0" Text="循环次数:" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"/>
+                                    <TextBox Grid.Column="1" Text="{Binding WorkflowVM.LibraryVM.LoopCount, UpdateSourceTrigger=PropertyChanged}" Width="50" Padding="4" VerticalAlignment="Center" FontSize="12"/>
 
-                                <TextBlock Grid.Column="2" Text="循环间隔(ms):" VerticalAlignment="Center" Margin="16,0,8,0" FontSize="12"/>
-                                <TextBox Grid.Column="3" Text="{Binding WorkflowVM.LibraryVM.LoopIntervalMs, UpdateSourceTrigger=PropertyChanged}" Width="60" Padding="4" VerticalAlignment="Center" FontSize="12"/>
+                                    <TextBlock Grid.Column="2" Text="循环间隔(ms):" VerticalAlignment="Center" Margin="16,0,8,0" FontSize="12"/>
+                                    <TextBox Grid.Column="3" Text="{Binding WorkflowVM.LibraryVM.LoopIntervalMs, UpdateSourceTrigger=PropertyChanged}" Width="60" Padding="4" VerticalAlignment="Center" FontSize="12"/>
 
-                                <TextBlock Grid.Column="4" Text="播放速度:" VerticalAlignment="Center" Margin="16,0,8,0" FontSize="12"/>
-                                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <RadioButton Content="1x" GroupName="Speed" Margin="0,0,6,0"
-                                                 IsChecked="{Binding WorkflowVM.LibraryVM.SpeedMultiplier, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=1}"
-                                                 Cursor="Hand" FontSize="12"/>
-                                    <RadioButton Content="2x" GroupName="Speed" Margin="0,0,6,0"
-                                                 IsChecked="{Binding WorkflowVM.LibraryVM.SpeedMultiplier, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=2}"
-                                                 Cursor="Hand" FontSize="12"/>
-                                    <RadioButton Content="5x" GroupName="Speed"
-                                                 IsChecked="{Binding WorkflowVM.LibraryVM.SpeedMultiplier, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=5}"
-                                                 Cursor="Hand" FontSize="12"/>
-                                </StackPanel>
+                                    <TextBlock Grid.Column="4" Text="播放速度:" VerticalAlignment="Center" Margin="16,0,8,0" FontSize="12"/>
+                                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <RadioButton Content="1x" GroupName="Speed" Margin="0,0,6,0"
+                                                     IsChecked="{Binding WorkflowVM.LibraryVM.SpeedMultiplier, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=1}"
+                                                     Cursor="Hand" FontSize="12"/>
+                                        <RadioButton Content="2x" GroupName="Speed" Margin="0,0,6,0"
+                                                     IsChecked="{Binding WorkflowVM.LibraryVM.SpeedMultiplier, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=2}"
+                                                     Cursor="Hand" FontSize="12"/>
+                                        <RadioButton Content="5x" GroupName="Speed"
+                                                     IsChecked="{Binding WorkflowVM.LibraryVM.SpeedMultiplier, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=5}"
+                                                     Cursor="Hand" FontSize="12"/>
+                                    </StackPanel>
 
-                                <TextBlock Grid.Column="6" Text="{Binding WorkflowVM.LibraryVM.ProgressText}" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="12" Foreground="#555"/>
-                            </Grid>
+                                    <TextBlock Grid.Column="6" Text="{Binding WorkflowVM.LibraryVM.ProgressText}" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="12" Foreground="#555"/>
+                                </Grid>
+
+                                <!-- v1.5.0: 智能监测开关 -->
+                                <CheckBox Content="&#x1F9E0; 启用智能监测 (执行 WaitForWindow/ExtractText 动作)"
+                                          IsChecked="{Binding WorkflowVM.LibraryVM.EnableSmartActions, Mode=TwoWay}"
+                                          FontSize="12" Margin="0,8,0,0" VerticalContentAlignment="Center"
+                                          ToolTip="启用后流程中的 WaitForWindow/ExtractText 智能动作才会执行；关闭时这些动作直接跳过，纯固定坐标回放 (兼容 v1.4.0)"/>
+                            </StackPanel>
                         </Border>
 
                         <!-- 播放控制 -->

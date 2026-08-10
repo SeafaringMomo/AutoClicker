@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using AutoClicker.Models;
 using AutoClicker.Native;
 
@@ -8,6 +10,141 @@ namespace AutoClicker.Services
 {
     public class WindowTreeService
     {
+        /// <summary>
+        /// v1.5.0 新增: 按条件查找顶层窗口
+        /// 所有条件都为空时返回 IntPtr.Zero
+        /// </summary>
+        /// <param name="titlePattern">标题通配符模式 (支持 *)，空字符串表示不限制</param>
+        /// <param name="className">类名精确匹配，空字符串表示不限制</param>
+        /// <param name="processName">进程名匹配 (如 notepad)，空字符串表示不限制</param>
+        /// <returns>第一个匹配窗口的句柄；未找到返回 IntPtr.Zero</returns>
+        public IntPtr FindWindow(string titlePattern, string className, string processName)
+        {
+            // 三条件都为空 — 无意义
+            if (string.IsNullOrEmpty(titlePattern) 
+                && string.IsNullOrEmpty(className) 
+                && string.IsNullOrEmpty(processName))
+            {
+                return IntPtr.Zero;
+            }
+
+            IntPtr found = IntPtr.Zero;
+            Win32.EnumWindows((h, _) =>
+            {
+                if (!Win32.IsWindowVisible(h)) return true;
+
+                var title = GetWindowTitle(h);
+                var cls = GetClassName(h);
+
+                // 标题通配符匹配 (* 匹配任意字符)
+                if (!string.IsNullOrEmpty(titlePattern) && !MatchWildcard(title, titlePattern))
+                    return true;
+                // 类名精确匹配
+                if (!string.IsNullOrEmpty(className) && cls != className)
+                    return true;
+                // 进程名匹配
+                if (!string.IsNullOrEmpty(processName))
+                {
+                    Win32.GetWindowThreadProcessId(h, out uint pid);
+                    try
+                    {
+                        var proc = Process.GetProcessById((int)pid);
+                        if (!proc.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                    catch
+                    {
+                        return true;
+                    }
+                }
+
+                found = h;
+                return false;  // 停止枚举
+            }, IntPtr.Zero);
+            return found;
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 通配符匹配 (* 匹配任意字符，? 匹配单字符)
+        /// 例如 MatchWildcard("订单详情 - #ORD123", "订单*") = true
+        /// </summary>
+        public static bool MatchWildcard(string input, string pattern)
+        {
+            if (string.IsNullOrEmpty(pattern)) return true;
+            if (string.IsNullOrEmpty(input)) return false;
+
+            // 将通配符转换为正则: * → .*, ? → ., 其他字符转义
+            var regex = "^" + Regex.Escape(pattern)
+                .Replace("\\*", ".*")
+                .Replace("\\?", ".") + "$";
+            return Regex.IsMatch(input, regex, RegexOptions.IgnoreCase);
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 枚举指定父窗口下指定类名的所有子控件
+        /// </summary>
+        public List<IntPtr> FindChildControls(IntPtr parentHwnd, string className)
+        {
+            var result = new List<IntPtr>();
+            if (parentHwnd == IntPtr.Zero) return result;
+
+            Win32.EnumChildWindows(parentHwnd, (h, _) =>
+            {
+                if (!string.IsNullOrEmpty(className))
+                {
+                    var cls = GetClassName(h);
+                    if (cls != className) return true;
+                }
+                result.Add(h);
+                return true;
+            }, IntPtr.Zero);
+            return result;
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 获取子控件文本 (WM_GETTEXT)
+        /// </summary>
+        public string GetControlText(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero) return string.Empty;
+            var sb = new StringBuilder(4096);
+            // WM_GETTEXT = 0x000D
+            Win32.SendMessage(hwnd, 0x000D, (IntPtr)4096, sb);
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 拼接所有子控件文本
+        /// </summary>
+        public string GetAllChildrenText(IntPtr parentHwnd)
+        {
+            if (parentHwnd == IntPtr.Zero) return string.Empty;
+            var sb = new StringBuilder();
+
+            Win32.EnumChildWindows(parentHwnd, (h, _) =>
+            {
+                var text = GetControlText(h);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    if (sb.Length > 0) sb.Append(" | ");
+                    sb.Append(text);
+                }
+                return true;
+            }, IntPtr.Zero);
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// v1.5.0 新增: 获取指定类名子控件序号对应的文本
+        /// </summary>
+        public string GetChildTextByIndex(IntPtr parentHwnd, string className, int index)
+        {
+            var children = FindChildControls(parentHwnd, className);
+            if (index < 0 || index >= children.Count) return string.Empty;
+            return GetControlText(children[index]);
+        }
+
         public List<WindowTreeNode> BuildWindowTree(int maxDepth = 3)
         {
             var roots = new List<WindowTreeNode>();
@@ -66,7 +203,8 @@ namespace AutoClicker.Services
             return sb.ToString();
         }
 
-        private string GetWindowTitle(IntPtr hWnd)
+        /// <summary>v1.5.0: 改为 public 供 WorkflowPlayer 使用</summary>
+        public string GetWindowTitle(IntPtr hWnd)
         {
             var length = Win32.GetWindowTextLength(hWnd);
             if (length == 0) return string.Empty;

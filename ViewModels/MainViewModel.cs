@@ -179,9 +179,13 @@ namespace AutoClicker.ViewModels
             WindowTreeVM = new WindowTreeModeViewModel(_clickService, _windowTreeService, _hotkeyService, _settings, SaveSettings, _dispatcher);
 
             // 初始化流程点击子 VM
-            var recorderVM = new WorkflowRecorderViewModel(_workflowRecorder, _workflowStorage, _dialog, _dispatcher);
+            var recorderVM = new WorkflowRecorderViewModel(_workflowRecorder, _workflowStorage, _dialog, _dispatcher, _windowTreeService);
             var libraryVM = new WorkflowLibraryViewModel(_workflowStorage, _workflowPlayer, _dialog, _dispatcher);
             WorkflowVM = new WorkflowModeViewModel(recorderVM, libraryVM);
+
+            // v1.5.0: 订阅 LibraryVM 智能动作事件
+            libraryVM.VariableExtracted += OnVariableExtracted;
+            libraryVM.SmartActionFailed += OnSmartActionFailed;
 
             // 设置 VM
             SettingsVM = new SettingsViewModel(_hotkeyService, _settings, SaveSettings, _dialog, process);
@@ -314,6 +318,61 @@ namespace AutoClicker.ViewModels
         private void OnPlaybackLoopProgress(int current, int total)
         {
             _dispatcher.BeginInvoke(UpdateStatusText);
+        }
+
+        // ========== v1.5.0 智能动作事件处理 ==========
+
+        /// <summary>
+        /// 变量提取 - 在状态栏显示瞬时提示
+        /// </summary>
+        private void OnVariableExtracted(string varName, string varValue)
+        {
+            _dispatcher.BeginInvoke(() =>
+            {
+                var display = varValue.Length > 30 ? varValue.Substring(0, 30) + "..." : varValue;
+                LastExtractedVariable = $"{varName}=\"{display}\"";
+                UpdateStatusText();
+            });
+        }
+
+        /// <summary>
+        /// 智能动作失败 - 弹窗让用户选择 (重试/跳过/中止)
+        /// </summary>
+        private void OnSmartActionFailed(WorkflowAction action, string reason, Action<FailureChoice> callback)
+        {
+            _dispatcher.BeginInvoke(() =>
+            {
+                Logger.Log($"智能动作失败弹窗: 步骤{action.Index} - {reason}", LogLevel.Warning, "MainVM");
+                var choice = ShowSmartFailureDialog(action, reason);
+                callback(choice);
+            });
+        }
+
+        /// <summary>
+        /// 显示智能动作失败对话框 - 返回用户选择
+        /// </summary>
+        private FailureChoice ShowSmartFailureDialog(WorkflowAction action, string reason)
+        {
+            var message = $"步骤 {action.Index}: {action.DisplayText}\n\n原因:\n{reason}\n\n请选择处理方式:";
+            var result = _dialog.ShowCustomDialog(
+                "⚠ 流程智能动作失败",
+                message,
+                new[] { "🔄 重试", "⏭ 跳过", "⏹ 中止流程" },
+                0);
+            return result switch
+            {
+                0 => FailureChoice.Retry,
+                1 => FailureChoice.Skip,
+                _ => FailureChoice.Abort
+            };
+        }
+
+        /// <summary>最近提取的变量文本 (用于状态栏显示)</summary>
+        private string _lastExtractedVariable = string.Empty;
+        public string LastExtractedVariable
+        {
+            get => _lastExtractedVariable;
+            set => SetProperty(ref _lastExtractedVariable, value);
         }
 
         private void OnHotkeyPressed(HotkeyId hotkeyId)

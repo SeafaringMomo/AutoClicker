@@ -25,6 +25,9 @@ namespace AutoClicker.ViewModels
             WorkflowActionType.KeyboardText => "#E8F5E9", // 浅绿
             WorkflowActionType.KeyPress => "#FFF3E0",     // 浅橙
             WorkflowActionType.Wait => "#ECEFF1",         // 浅灰
+            // v1.5.0 智能动作
+            WorkflowActionType.WaitForWindow => "#F3E5F5", // 浅紫
+            WorkflowActionType.ExtractText => "#FFFDE7",   // 浅黄
             _ => "#FFFFFF"
         };
 
@@ -36,11 +39,21 @@ namespace AutoClicker.ViewModels
             WorkflowActionType.KeyboardText => "⌨",
             WorkflowActionType.KeyPress => "⌨",
             WorkflowActionType.Wait => "⏱",
+            // v1.5.0 智能动作
+            WorkflowActionType.WaitForWindow => "⏳",
+            WorkflowActionType.ExtractText => "📋",
             _ => "?"
         };
 
         /// <summary>摘要文本 (含序号 + 内容 + 延迟)</summary>
         public string Summary => $"#{Index}  {DisplayText}  {DelayText}";
+
+        /// <summary>
+        /// v1.5.0: 是否为智能动作 (受 Workflow.EnableSmartActions 开关控制)
+        /// 用于 UI 显示标记
+        /// </summary>
+        public bool IsSmartAction => Action.Type == WorkflowActionType.WaitForWindow
+                                  || Action.Type == WorkflowActionType.ExtractText;
 
         public WorkflowActionViewModel(WorkflowAction action)
         {
@@ -52,6 +65,9 @@ namespace AutoClicker.ViewModels
             OnPropertyChanged(nameof(DisplayText));
             OnPropertyChanged(nameof(DelayText));
             OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(BackgroundHex));
+            OnPropertyChanged(nameof(TypeIcon));
+            OnPropertyChanged(nameof(IsSmartAction));
         }
     }
 }

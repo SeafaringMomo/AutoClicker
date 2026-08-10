@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace AutoClicker.Native
 {
@@ -80,6 +81,24 @@ namespace AutoClicker.Native
         [DllImport("user32.dll")]
         public static extern IntPtr GetForegroundWindow();
 
+        // ========== v1.5.0 新增: 窗口激活 ==========
+
+        [DllImport("user32.dll")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        public const int SW_RESTORE = 9;
+        public const int SW_SHOW = 5;
+        public const int SW_SHOWNORMAL = 1;
+
+        [DllImport("user32.dll")]
+        public static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool IsZoomed(IntPtr hWnd);
+
         // ========== 窗口操作 ==========
 
         [DllImport("user32.dll")]
@@ -128,6 +147,12 @@ namespace AutoClicker.Native
 
         [DllImport("user32.dll")]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        /// <summary>
+        /// v1.5.0 新增: WM_GETTEXT 用重载 — 接受 StringBuilder 接收文本
+        /// </summary>
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, StringBuilder lParam);
 
         [DllImport("user32.dll")]
         public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);

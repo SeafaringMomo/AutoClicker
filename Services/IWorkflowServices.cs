@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using AutoClicker.Models;
 
 namespace AutoClicker.Services
@@ -24,6 +25,46 @@ namespace AutoClicker.Services
         Paused,     // 已暂停
         Completed,  // 已完成
         Aborted     // 已中止
+    }
+
+    /// <summary>
+    /// 智能动作失败时用户在弹窗中的选择
+    /// </summary>
+    public enum FailureChoice
+    {
+        /// <summary>重新执行本步</summary>
+        Retry,
+        /// <summary>跳过本步继续</summary>
+        Skip,
+        /// <summary>中止整个流程</summary>
+        Abort
+    }
+
+    /// <summary>
+    /// 流程播放上下文 - 单次播放内有效的变量字典
+    /// 每次循环独立创建，避免污染
+    /// </summary>
+    public class WorkflowContext
+    {
+        private readonly Dictionary<string, string> _vars = new();
+
+        public void Set(string key, string value) => _vars[key] = value ?? "";
+        public string Get(string key) => _vars.TryGetValue(key, out var v) ? v : "";
+        public bool Has(string key) => _vars.ContainsKey(key);
+
+        /// <summary>
+        /// 解析模板字符串中的 ${var} 引用
+        /// 例如 "订单号是 ${orderId}" → "订单号是 ORD-2026-001"
+        /// </summary>
+        public string ResolveTemplate(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            return Regex.Replace(text, @"\$\{(\w+)\}",
+                m => _vars.TryGetValue(m.Groups[1].Value, out var v) ? v : "");
+        }
+
+        /// <summary>导出所有变量 (用于调试/日志)</summary>
+        public IReadOnlyDictionary<string, string> GetAll() => _vars;
     }
 
     /// <summary>
@@ -99,6 +140,19 @@ namespace AutoClicker.Services
 
         /// <summary>循环进度事件 (CurrentLoop, TotalLoops)</summary>
         event Action<int, int>? LoopProgress;
+
+        /// <summary>
+        /// v1.5.0 新增: 变量提取事件
+        /// 参数: (变量名, 变量值) - UI 可订阅以在状态栏显示提示
+        /// </summary>
+        event Action<string, string>? VariableExtracted;
+
+        /// <summary>
+        /// v1.5.0 新增: 智能动作失败事件
+        /// 参数: (失败动作, 失败原因, 用户选择回调)
+        /// 调用 callback 时传入用户的选择 (Retry/Skip/Abort)
+        /// </summary>
+        event Action<WorkflowAction, string, Action<FailureChoice>>? SmartActionFailed;
 
         /// <summary>开始播放</summary>
         /// <param name="workflow">要播放的流程</param>

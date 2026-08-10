@@ -33,6 +33,8 @@ namespace AutoClicker.ViewModels
                     {
                         LoopCount = value.DefaultLoopCount;
                         LoopIntervalMs = value.DefaultIntervalMs;
+                        // v1.5.0: 同步 EnableSmartActions
+                        SyncFromWorkflow(value);
                     }
                     (PlayCommand as RelayCommand)?.RaiseCanExecuteChanged();
                     (EditCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -81,6 +83,19 @@ namespace AutoClicker.ViewModels
                     _player.SpeedMultiplier = value;
                 }
             }
+        }
+
+        // v1.5.0: 是否启用智能动作开关
+        private bool _enableSmartActions = false;
+        /// <summary>
+        /// 启用智能动作 (WaitForWindow/ExtractText)
+        /// false=这些动作直接跳过，纯固定坐标回放 (v1.4.0 兼容)
+        /// true=按动作定义执行窗口监测与信息提取
+        /// </summary>
+        public bool EnableSmartActions
+        {
+            get => _enableSmartActions;
+            set => SetProperty(ref _enableSmartActions, value);
         }
 
         // 播放状态
@@ -149,6 +164,10 @@ namespace AutoClicker.ViewModels
             _player.StepProgress += OnStepProgress;
             _player.LoopProgress += OnLoopProgress;
 
+            // v1.5.0: 转发智能动作事件
+            _player.VariableExtracted += OnVariableExtracted;
+            _player.SmartActionFailed += OnSmartActionFailed;
+
             RefreshCommand = new RelayCommand(_ => RefreshLibrary());
             PlayCommand = new RelayCommand(_ => PlaySelected(), _ => SelectedWorkflow != null && !IsPlayingOrPaused);
             PauseCommand = new RelayCommand(_ => TogglePause(), _ => IsPlayingOrPaused);
@@ -191,8 +210,23 @@ namespace AutoClicker.ViewModels
                 return;
             }
 
+            // v1.5.0: 同步开关到 workflow 对象 (播放器从 workflow 读取)
+            SelectedWorkflow.EnableSmartActions = EnableSmartActions;
+
             _player.SpeedMultiplier = SpeedMultiplier;
             _player.Play(SelectedWorkflow, LoopCount, LoopIntervalMs);
+        }
+
+        /// <summary>
+        /// v1.5.0: 同步选中 workflow 的 EnableSmartActions 到本 VM 开关
+        /// 在切换 SelectedWorkflow 时调用
+        /// </summary>
+        private void SyncFromWorkflow(Workflow w)
+        {
+            if (w != null)
+            {
+                EnableSmartActions = w.EnableSmartActions;
+            }
         }
 
         private void TogglePause()
@@ -330,6 +364,37 @@ namespace AutoClicker.ViewModels
                 TotalLoops = total;
             });
         }
+
+        // ========== v1.5.0 智能动作事件 ==========
+
+        private void OnVariableExtracted(string varName, string varValue)
+        {
+            _dispatcher.BeginInvoke(() =>
+            {
+                var display = varValue.Length > 30 ? varValue.Substring(0, 30) + "..." : varValue;
+                VariableExtracted?.Invoke(varName, varValue);
+                Logger.Log($"变量提取提示: {varName} = '{display}'", LogLevel.Info, "LibraryVM");
+            });
+        }
+
+        private void OnSmartActionFailed(WorkflowAction action, string reason, Action<FailureChoice> callback)
+        {
+            // 智能动作失败 - 通知 MainVM 弹窗让用户选择
+            _dispatcher.BeginInvoke(() =>
+            {
+                SmartActionFailed?.Invoke(action, reason, callback);
+            });
+        }
+
+        /// <summary>
+        /// v1.5.0: 变量提取事件 (供 MainVM 订阅显示状态栏提示)
+        /// </summary>
+        public event Action<string, string>? VariableExtracted;
+
+        /// <summary>
+        /// v1.5.0: 智能动作失败事件 (供 MainVM 订阅显示弹窗)
+        /// </summary>
+        public event Action<WorkflowAction, string, Action<FailureChoice>>? SmartActionFailed;
 
         /// <summary>
         /// 当外部加载流程到录制页时，刷新库列表

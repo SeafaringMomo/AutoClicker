@@ -16,6 +16,7 @@ namespace AutoClicker.ViewModels
         private readonly IWorkflowStorage _storage;
         private readonly IDialogService _dialog;
         private readonly IDispatcherService _dispatcher;
+        private readonly WindowTreeService _windowTreeService;
 
         public ObservableCollection<WorkflowActionViewModel> Actions { get; } = new();
 
@@ -88,6 +89,11 @@ namespace AutoClicker.ViewModels
         public ICommand EditActionCommand { get; }
         public ICommand SaveWorkflowCommand { get; }
 
+        // v1.5.0: 插入智能动作命令
+        public ICommand InsertWaitForWindowCommand { get; }
+        public ICommand InsertExtractTextCommand { get; }
+        public ICommand InsertWaitCommand { get; }
+
         // 录制状态变更事件 (供主 VM 通知 UI 显示悬浮窗)
         public event Action? RequestShowFloatingWindow;
         public event Action? RequestHideFloatingWindow;
@@ -99,12 +105,14 @@ namespace AutoClicker.ViewModels
             IWorkflowRecorder recorder,
             IWorkflowStorage storage,
             IDialogService dialog,
-            IDispatcherService dispatcher)
+            IDispatcherService dispatcher,
+            WindowTreeService windowTreeService)
         {
             _recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
             _storage = storage ?? throw new ArgumentNullException(nameof(storage));
             _dialog = dialog ?? throw new ArgumentNullException(nameof(dialog));
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+            _windowTreeService = windowTreeService ?? throw new ArgumentNullException(nameof(windowTreeService));
 
             _recorder.StateChanged += OnRecordingStateChanged;
             _recorder.ActionRecorded += OnActionRecorded;
@@ -126,11 +134,72 @@ namespace AutoClicker.ViewModels
             SaveWorkflowCommand = new RelayCommand(_ => SaveWorkflow(),
                 _ => Actions.Count > 0 && State == RecordingState.Idle);
 
+            // v1.5.0: 插入智能动作命令 (仅在空闲状态可用)
+            InsertWaitForWindowCommand = new RelayCommand(_ => InsertSmartAction(WorkflowActionType.WaitForWindow),
+                _ => State == RecordingState.Idle);
+            InsertExtractTextCommand = new RelayCommand(_ => InsertSmartAction(WorkflowActionType.ExtractText),
+                _ => State == RecordingState.Idle);
+            InsertWaitCommand = new RelayCommand(_ => InsertSmartAction(WorkflowActionType.Wait),
+                _ => State == RecordingState.Idle);
+
             _refreshTimer = new System.Windows.Threading.DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(200)
             };
             _refreshTimer.Tick += (_, _) => RefreshRecordingStatus();
+        }
+
+        /// <summary>
+        /// v1.5.0: 插入智能动作 — 弹出编辑对话框让用户配置
+        /// </summary>
+        private void InsertSmartAction(WorkflowActionType type)
+        {
+            var action = new WorkflowAction
+            {
+                Index = Actions.Count + 1,
+                Type = type,
+                Description = type switch
+                {
+                    WorkflowActionType.WaitForWindow => "等待窗口出现",
+                    WorkflowActionType.ExtractText => "提取文本到变量",
+                    WorkflowActionType.Wait => "显式等待",
+                    _ => ""
+                }
+            };
+
+            // WaitForWindow 默认值
+            if (type == WorkflowActionType.WaitForWindow)
+            {
+                action.WindowTitlePattern = "*";
+                action.TimeoutMs = 5000;
+                action.OnFailure = FailureAction.Prompt;
+                action.ActivateWindow = true;
+            }
+            // ExtractText 默认值
+            else if (type == WorkflowActionType.ExtractText)
+            {
+                action.TextSource = TextSource.WindowTitle;
+                action.OutputVariable = "var1";
+            }
+            // Wait 默认值
+            else if (type == WorkflowActionType.Wait)
+            {
+                action.DelayMs = 1000;
+            }
+
+            // 弹出编辑对话框
+            var editVm = new WorkflowActionEditViewModel(action, _windowTreeService, _dialog);
+            var window = new WorkflowActionEditWindow(editVm);
+            window.Owner = System.Windows.Application.Current?.MainWindow;
+
+            if (window.ShowDialog() == true)
+            {
+                // 用户确认插入
+                var vm = new WorkflowActionViewModel(action);
+                Actions.Add(vm);
+                ActionCountText = $"{Actions.Count} 步";
+                Logger.Log($"插入动作 #{action.Index}: {action.DisplayText}", LogLevel.Info, "RecorderVM");
+            }
         }
 
         private void OnRecordingStateChanged(RecordingState newState)
@@ -271,119 +340,17 @@ namespace AutoClicker.ViewModels
         {
             if (vm == null) return;
 
-            // 简单编辑：通过对话框修改延迟和文本/坐标
+            // v1.5.0: 改用统一的编辑对话框
             var action = vm.Action;
-            string prompt;
-            string initial;
+            var editVm = new WorkflowActionEditViewModel(action, _windowTreeService, _dialog);
+            var window = new WorkflowActionEditWindow(editVm);
+            window.Owner = System.Windows.Application.Current?.MainWindow;
 
-            switch (action.Type)
+            if (window.ShowDialog() == true)
             {
-                case WorkflowActionType.MouseClick:
-                case WorkflowActionType.MouseMove:
-                    initial = $"{action.X},{action.Y},{action.DelayMs}";
-                    prompt = "编辑鼠标动作 (格式: X,Y,延迟ms):";
-                    break;
-                case WorkflowActionType.KeyboardText:
-                    initial = action.Text;
-                    prompt = "编辑文本内容:";
-                    break;
-                case WorkflowActionType.KeyPress:
-                    initial = $"0x{action.VirtualKey:X2},{action.DelayMs}";
-                    prompt = "编辑按键 (格式: VK码(16进制),延迟ms):";
-                    break;
-                case WorkflowActionType.Wait:
-                    initial = action.DelayMs.ToString();
-                    prompt = "编辑等待时间 (ms):";
-                    break;
-                default:
-                    return;
-            }
-
-            // 这里使用 InputDialog 简化方案 - 实际项目中可改为专门的编辑窗口
-            var result = ShowInputDialog(prompt, initial);
-            if (result == null) return;
-
-            try
-            {
-                switch (action.Type)
-                {
-                    case WorkflowActionType.MouseClick:
-                    case WorkflowActionType.MouseMove:
-                        var parts = result.Split(',');
-                        if (parts.Length >= 2)
-                        {
-                            action.X = int.Parse(parts[0]);
-                            action.Y = int.Parse(parts[1]);
-                            if (parts.Length >= 3) action.DelayMs = int.Parse(parts[2]);
-                        }
-                        break;
-                    case WorkflowActionType.KeyboardText:
-                        action.Text = result;
-                        break;
-                    case WorkflowActionType.KeyPress:
-                        var kparts = result.Split(',');
-                        action.VirtualKey = Convert.ToUInt32(kparts[0], 16);
-                        if (kparts.Length >= 2) action.DelayMs = int.Parse(kparts[1]);
-                        break;
-                    case WorkflowActionType.Wait:
-                        action.DelayMs = int.Parse(result);
-                        break;
-                }
-
                 vm.RefreshDisplay();
                 Logger.Log($"动作 #{action.Index} 已编辑", LogLevel.Debug, "RecorderVM");
             }
-            catch (Exception ex)
-            {
-                _dialog.ShowError($"格式错误: {ex.Message}", "编辑失败");
-            }
-        }
-
-        /// <summary>
-        /// 简易输入对话框 (避免新建 Window 文件)
-        /// </summary>
-        private string? ShowInputDialog(string prompt, string initial)
-        {
-            var window = new System.Windows.Window
-            {
-                Title = "编辑动作",
-                Width = 400,
-                Height = 200,
-                WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
-                Owner = System.Windows.Application.Current?.MainWindow,
-                ResizeMode = System.Windows.ResizeMode.NoResize
-            };
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = prompt, Margin = new System.Windows.Thickness(0, 0, 0, 8) });
-
-            var textBox = new System.Windows.Controls.TextBox
-            {
-                Text = initial,
-                Padding = new System.Windows.Thickness(6, 4, 6, 4)
-            };
-            panel.Children.Add(textBox);
-
-            var btnPanel = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-                Margin = new System.Windows.Thickness(0, 16, 0, 0)
-            };
-
-            var okBtn = new System.Windows.Controls.Button { Content = "确定", Padding = new System.Windows.Thickness(16, 4, 16, 4), Margin = new System.Windows.Thickness(0, 0, 8, 0) };
-            var cancelBtn = new System.Windows.Controls.Button { Content = "取消", Padding = new System.Windows.Thickness(16, 4, 16, 4) };
-            btnPanel.Children.Add(okBtn);
-            btnPanel.Children.Add(cancelBtn);
-            panel.Children.Add(btnPanel);
-
-            window.Content = panel;
-
-            string? result = null;
-            okBtn.Click += (_, _) => { result = textBox.Text; window.DialogResult = true; window.Close(); };
-            cancelBtn.Click += (_, _) => { window.DialogResult = false; window.Close(); };
-
-            return window.ShowDialog() == true ? result : null;
         }
 
         private void SaveWorkflow()

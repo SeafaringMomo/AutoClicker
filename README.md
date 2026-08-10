@@ -1,8 +1,10 @@
-# AutoClicker v1.4.0
+# AutoClicker v1.5.0
 
 Windows 桌面鼠标连点工具，WPF (.NET 8) 实现，严格遵循 MVVM 架构 (View / ViewModel / Model / Service 彻底分离)。
 
 v1.4.0 新增**流程点击**功能 — 录制鼠标点击 + 键盘输入序列，保存为可重复使用的"流程副本"，支持循环播放、倍速、编辑、导入导出。原"模式1 悬停定位 / 模式2 窗口树定位"合并为一级 Tab「单点连点」下的两个子定位方式。
+
+v1.5.0 新增**智能动作 (Smart Actions)** — 在流程中插入 `WaitForWindow` (等待窗口出现) 和 `ExtractText` (提取文本到变量) 两类智能动作，通过 `EnableSmartActions` 开关控制是否启用。关闭时纯固定坐标回放，完全兼容 v1.4.0；启用后可监测点击打开的页面、提取页面信息供后续步骤模板引用，失败时可弹窗让用户选择重试/跳过/中止。
 
 ## 功能特性
 
@@ -26,6 +28,19 @@ v1.4.0 新增**流程点击**功能 — 录制鼠标点击 + 键盘输入序列�
 - **基础编辑**：录制完成后可上移/下移/删除/编辑单步动作
 - **录制悬浮窗**：录制时弹出 220×80 半透明置顶悬浮窗 (红点闪烁 + 时长 + 步骤数)，可拖动到任意位置
 - **回放技术**：`SendInput` API (兼容性优于 `mouse_event`/`keybd_event`)，UNICODE 文本输入
+
+### 智能动作 (v1.5.0 新增)
+
+智能动作用于在固定坐标回放的基础上，按需加入"窗口监测"与"信息提取"能力，解决"点击后页面未打开就执行下一步"的问题。
+
+- **EnableSmartActions 开关** — 流程库子页底部复选框，关闭 (默认) 时 `WaitForWindow`/`ExtractText` 动作直接跳过，纯固定坐标回放；启用后按动作定义执行
+- **WaitForWindow** — 等待指定窗口出现再继续；支持按标题通配符 / 类名 / 进程名匹配，可设超时和失败处理策略
+- **ExtractText** — 从已打开的窗口提取文本到变量，供后续步骤模板引用 `${varName}` 引用
+- **变量模板** — 任何动作的文本字段都可用 `${varName}` 引用前序 ExtractText 提取的变量
+- **失败处理** — `Prompt` 弹窗让用户选择 / `Abort` 中止流程 / `Skip` 跳过 / `Retry` 无限重试
+- **测试匹配/测试提取** — 编辑对话框可实时测试窗口匹配条件与文本提取效果，无需保存流程
+- **窗口拾取** — 一键拾取当前前台窗口的标题/类名/进程名填充匹配条件
+- **向后兼容** — 旧 `workflows.json` 文件无需迁移，新增字段都有默认值
 
 ### 通用
 
@@ -82,8 +97,10 @@ v1.4.0 新增**流程点击**功能 — 录制鼠标点击 + 键盘输入序列�
 AutoClicker/
 ├── AutoClicker.csproj              # 项目配置
 ├── App.xaml / App.xaml.cs          # 应用入口 (含全局异常处理 + 启动时 LogSystemInfo + CleanupOldLogs)
-├── MainWindow.xaml                 # 主界面 XAML (640x720, 一级Tab + SegmentedControl + 流程子页)
+├── MainWindow.xaml                 # 主界面 XAML (640x720, 一级Tab + SegmentedControl + 流程子页 + 智能监测开关)
 ├── MainWindow.xaml.cs              # 主界面逻辑 (视图事件转发 + 悬浮窗管理)
+├── WorkflowActionEditWindow.xaml   # v1.5.0 流程动作编辑对话框 (含智能动作字段 + 测试匹配/提取)
+├── WorkflowActionEditWindow.xaml.cs# 编辑对话框 code-behind (订阅 VM 事件关闭窗口)
 ├── FloatingRecordingWindow.xaml    # 录制悬浮窗 (220x80 半透明置顶)
 ├── FloatingRecordingWindow.xaml.cs # 悬浮窗逻辑 (200ms 刷新 + 拖动支持)
 ├── Native/
@@ -116,9 +133,10 @@ AutoClicker/
 │   ├── HoverModeViewModel.cs       # 悬停定位 VM
 │   ├── WindowTreeModeViewModel.cs  # 窗口树定位 VM
 │   ├── WorkflowModeViewModel.cs    # 流程点击主 VM (二级Tab: 新建/使用)
-│   ├── WorkflowRecorderViewModel.cs# 流程录制 VM (录制控制 + 动作编辑)
-│   ├── WorkflowLibraryViewModel.cs # 流程库 VM (列表 + 详情 + 播放控制)
-│   ├── WorkflowActionViewModel.cs  # 流程动作 VM (颜色/图标/显示文本)
+│   ├── WorkflowRecorderViewModel.cs# 流程录制 VM (录制控制 + 动作编辑 + 插入智能动作)
+│   ├── WorkflowLibraryViewModel.cs # 流程库 VM (列表 + 详情 + 播放控制 + EnableSmartActions 开关 + 智能动作事件转发)
+│   ├── WorkflowActionViewModel.cs  # 流程动作 VM (颜色/图标/显示文本 + IsSmartAction 标记)
+│   ├── WorkflowActionEditViewModel.cs # v1.5.0 动作编辑 VM (统一编辑所有类型 + 测试匹配/提取)
 │   ├── WindowTreeNodeWrapper.cs    # TreeView 节点包装器
 │   └── SettingsViewModel.cs        # 设置/帮助菜单 VM
 └── README.md
@@ -234,8 +252,28 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
    - 循环次数 (默认 1)
    - 循环间隔毫秒 (默认 1000)
    - 播放速度 1x / 2x / 5x (延迟按倍率缩短)
+   - **启用智能监测** (v1.5.0 新增)：勾选后 `WaitForWindow`/`ExtractText` 动作才会执行；不勾选时纯固定坐标回放 (默认)
 5. 点击 "播放 (F6)" 启动 — 状态栏显示「运行中 第N步/共N步 | 循环 N/M」
 6. 可暂停/停止，或按 Ctrl+Esc 强制停止
+
+### 流程点击 - 插入智能动作 (v1.5.0 新增)
+
+在「新建流程」子页的动作列表下方，除原有的 上移/下移/编辑/删除 外，新增三个插入按钮：
+
+1. **⏳ 等待窗口** — 插入 `WaitForWindow` 动作
+   - 在编辑对话框中填写匹配条件 (标题通配符 / 类名 / 进程名，至少一项)
+   - 可点击「拾取当前窗口」按钮自动填充当前前台窗口的标题/类名/进程名
+   - 设置超时 (默认 5000ms) 与失败处理策略 (默认 Prompt)
+   - 可点击「测试匹配」立即验证当前条件能否匹配到窗口
+2. **📋 提取信息** — 插入 `ExtractText` 动作
+   - 选择文本来源 (窗口标题 / 子控件文本 / 所有子控件合并 / Edit 控件值)
+   - 指定输出变量名 (如 `orderId`)
+   - 可点击「测试提取」预览提取结果
+3. **⏱ 插入等待** — 插入固定延时动作 (非智能动作)
+
+后续动作可在 Text 等字段中使用 `${变量名}` 引用提取的变量，回放时自动替换。
+
+> **重要**：智能动作必须勾选「启用智能监测」才会执行，否则在回放时直接跳过。这一设计保证纯固定坐标场景下流程库的稳定性，避免误触发窗口查找逻辑。
 
 ### 间隔设置
 
@@ -283,6 +321,42 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 | KeyboardText | ⌨ | 浅绿 #E8F5E9 | 文本输入 (连续字符自动合并) |
 | KeyPress | ⌨ | 浅橙 #FFF3E0 | 单键按下 (Enter/Tab/ESC 等功能键) |
 | Wait | ⏱ | 浅灰 #ECEFF1 | 显式等待 |
+| WaitForWindow | ⏳ | 浅紫 #F3E5F5 | v1.5.0 智能动作：等待窗口出现 |
+| ExtractText | 📋 | 浅黄 #FFFDE7 | v1.5.0 智能动作：提取文本到变量 |
+
+### 智能动作详细参数 (v1.5.0)
+
+**WaitForWindow** — 等待目标窗口出现
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| WindowTitlePattern | string | "" | 窗口标题通配符 (`*` 匹配任意字符, `?` 匹配单字符) |
+| WindowClassName | string | "" | 窗口类名 (精确匹配) |
+| ProcessName | string | "" | 进程名 (不区分大小写) |
+| TimeoutMs | int | 5000 | 超时毫秒数 (超时触发 OnFailure 策略) |
+| ActivateWindow | bool | true | 找到窗口后是否激活置前 |
+| OnFailure | FailureAction | Prompt | 超时失败处理：Prompt/Abort/Skip/Retry |
+
+**ExtractText** — 从窗口提取文本到变量
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| TextSource | TextSource | WindowTitle | 文本来源：WindowTitle/ChildControlText/AllChildrenText/EditControlValue |
+| TargetControlClass | string | "" | 目标控件类名 (用于 ChildControlText/EditControlValue) |
+| TargetControlIndex | int | 0 | 目标控件序号 (同类控件中第几个) |
+| OutputVariable | string | "" | 输出变量名，后续步骤用 `${varName}` 引用 |
+| OnFailure | FailureAction | Prompt | 提取失败处理 |
+
+**变量模板语法**：在后续动作的 Text 等字段中使用 `${varName}`，回放时自动替换为变量值。例如 `ExtractText` 提取了 `orderId`，后续 `KeyboardText` 的 Text 设为 `订单号: ${orderId}` 即可拼接输出。
+
+**失败处理策略 (OnFailure)**：
+
+| 策略 | 行为 |
+|------|------|
+| Prompt | 弹窗让用户选择 重试 / 跳过 / 中止流程 (默认) |
+| Abort | 直接中止整个流程 |
+| Skip | 跳过该动作继续下一步 |
+| Retry | 无限重试直到成功 (慎用，可能死循环) |
 
 ### 日志查看
 
@@ -340,12 +414,12 @@ Logger.MinimumLevel = LogLevel.Warning;
       "Description": "登录网站",
       "CreatedAt": "2026-07-20T10:00:00",
       "UpdatedAt": "2026-07-20T10:30:00",
+      "EnableSmartActions": true,
       "Actions": [
         { "Index": 1, "Type": "MouseClick", "Button": "Left", "X": 100, "Y": 200, "DelayMs": 0 },
-        { "Index": 2, "Type": "KeyboardText", "Text": "username", "DelayMs": 50 },
-        { "Index": 3, "Type": "KeyPress", "VirtualKey": 9, "DelayMs": 30 },
-        { "Index": 4, "Type": "KeyboardText", "Text": "password", "DelayMs": 50 },
-        { "Index": 5, "Type": "KeyPress", "VirtualKey": 13, "DelayMs": 100 }
+        { "Index": 2, "Type": "WaitForWindow", "WindowTitlePattern": "登录成功*", "TimeoutMs": 5000, "OnFailure": "Prompt", "ActivateWindow": true, "DelayMs": 0 },
+        { "Index": 3, "Type": "ExtractText", "TextSource": "WindowTitle", "OutputVariable": "pageTitle", "OnFailure": "Skip", "DelayMs": 0 },
+        { "Index": 4, "Type": "KeyboardText", "Text": "当前页: ${pageTitle}", "DelayMs": 50 }
       ],
       "DefaultLoopCount": 1,
       "DefaultIntervalMs": 0,
@@ -355,7 +429,7 @@ Logger.MinimumLevel = LogLevel.Warning;
 }
 ```
 
-保存时自动创建 `.bak` 备份。单个流程可通过 "导出" 按钮导出为独立 JSON 文件，"导入" 时会重新生成 ID 避免冲突。
+保存时自动创建 `.bak` 备份。单个流程可通过 "导出" 按钮导出为独立 JSON 文件，"导入" 时会重新生成 ID 避免冲突。`EnableSmartActions` 字段控制是否启用智能动作；旧版 (v1.4.0) workflows.json 不含该字段，反序列化时默认为 `false`，纯固定坐标回放完全兼容。
 
 ## 单点连点两种定位方式对比
 
@@ -368,6 +442,71 @@ Logger.MinimumLevel = LogLevel.Warning;
 | 推荐发送方式 | - | PostMessage (异步) |
 
 ## 更新日志
+
+### v1.5.0 (2026-07-21) - 智能动作 (Smart Actions)
+
+- **新增智能动作功能**：在流程中插入 `WaitForWindow` (等待窗口出现) 和 `ExtractText` (提取文本到变量) 两类智能动作
+  - **EnableSmartActions 开关**：流程库子页底部复选框，关闭时 (默认) 智能动作直接跳过，纯固定坐标回放完全兼容 v1.4.0
+  - **WaitForWindow**：按标题通配符 (`*`/`?`) / 类名 / 进程名匹配目标窗口，可设超时与失败处理策略；支持激活置前最小化窗口
+  - **ExtractText**：4 种文本来源 (WindowTitle / ChildControlText / AllChildrenText / EditControlValue)，提取到命名变量供后续步骤模板引用
+  - **变量模板**：`${varName}` 语法在 Text 等字段中引用前序 ExtractText 提取的变量，回放时正则替换
+  - **失败处理**：4 种策略 (Prompt 弹窗选择 / Abort 中止 / Skip 跳过 / Retry 无限重试)；Prompt 通过 `TaskCompletionSource<FailureChoice>` 跨线程等待 UI 响应
+  - **WorkflowContext**：每次循环独立变量字典，自动隔离不同循环迭代
+- **新增动作编辑对话框**：`WorkflowActionEditWindow.xaml` + `WorkflowActionEditViewModel.cs`
+  - 统一编辑所有动作类型 (鼠标/键盘/等待/智能动作)
+  - ComboBox 选择失败处理策略 (替代 RadioButton，减小对话框尺寸)
+  - 按动作类型动态显示/隐藏相关字段
+  - 「测试匹配」/「测试提取」按钮实时验证窗口条件与文本提取效果，无需保存流程
+  - 「拾取当前窗口」按钮自动填充当前前台窗口的标题/类名/进程名
+- **扩展 Models/Workflow.cs**：
+  - `WorkflowActionType` 新增 `WaitForWindow` / `ExtractText`
+  - 新增 `FailureAction` 枚举 (Prompt/Abort/Skip/Retry)
+  - 新增 `TextSource` 枚举 (WindowTitle/ChildControlText/AllChildrenText/EditControlValue)
+  - `WorkflowAction` 新增字段：`WindowTitlePattern` / `WindowClassName` / `ProcessName` / `TimeoutMs=5000` / `ActivateWindow=true` / `OnFailure=Prompt` / `OutputVariable` / `TextSource=WindowTitle` / `TargetControlClass` / `TargetControlIndex=0`
+  - `Workflow` 新增 `EnableSmartActions=false` 字段
+  - `DisplayText` getter 支持 WaitForWindow/ExtractText 摘要，Workflow 在 EnableSmartActions=true 时显示 "★智能" 后缀
+- **扩展 Services/WindowTreeService.cs**：
+  - 新增 `FindWindow(titlePattern, className, processName)` — EnumWindows + 通配符/进程名匹配
+  - 新增 `MatchWildcard(input, pattern)` — `*`→`.*` / `?`→`.` 正则转换
+  - 新增 `FindChildControls(parentHwnd, className)` / `GetControlText(hwnd)` (WM_GETTEXT) / `GetAllChildrenText(parentHwnd)` / `GetChildTextByIndex(parentHwnd, className, index)`
+  - `GetWindowTitle` 改为 public 供 Player/VM 复用
+- **扩展 Native/Win32.cs**：
+  - 新增 `SendMessage` 重载 (StringBuilder lParam，用于 WM_GETTEXT)
+  - 新增 `SetForegroundWindow` / `ShowWindow` / `IsIconic` / `IsZoomed` 及常量 `SW_RESTORE=9` / `SW_SHOW=5` / `SW_SHOWNORMAL=1`
+- **重写 Services/WorkflowPlayer.cs**：
+  - 注入 `WindowTreeService` 依赖
+  - 智能动作跳过逻辑：`!workflow.EnableSmartActions && IsSmartAction(type)` 直接 continue
+  - `ExecuteWaitForWindow` — 轮询查找窗口 (200ms 间隔) + 超时 + OnFailure 策略分发
+  - `ExecuteExtractText` — 按 TextSource 提取文本 + `WorkflowContext.Set(varName, value)`
+  - `HandleSmartFailureAsync` — 用 `TaskCompletionSource<FailureChoice>` 异步等待 UI 决策
+  - 新增 `VariableExtracted` / `SmartActionFailed` 事件供 VM 订阅
+  - 新增 `WorkflowAbortException` 用于 Abort 策略中断播放循环
+- **扩展 Services/IWorkflowServices.cs**：
+  - 新增 `FailureChoice` 枚举 (Retry/Skip/Abort)
+  - 新增 `WorkflowContext` 类 — Set/Get/Has/ResolveTemplate (正则 `${var}` 替换) /GetAll
+  - `IWorkflowPlayer` 新增 `VariableExtracted` / `SmartActionFailed` 事件
+- **扩展 ViewModels/WorkflowActionViewModel.cs**：新增 WaitForWindow (浅紫) / ExtractText (浅黄) 背景色与图标 (⏳/📋)；新增 `IsSmartAction` 属性
+- **新增 ViewModels/WorkflowActionEditViewModel.cs**：统一编辑 VM + 测试匹配/提取命令 + 拾取窗口命令 + 类型驱动的可见性属性
+- **扩展 ViewModels/WorkflowRecorderViewModel.cs**：
+  - 注入 `WindowTreeService`
+  - 新增 `InsertWaitForWindowCommand` / `InsertExtractTextCommand` / `InsertWaitCommand`
+  - `EditAction` 改用新的 `WorkflowActionEditWindow` (移除旧的 ShowInputDialog)
+- **扩展 ViewModels/WorkflowLibraryViewModel.cs**：
+  - 新增 `EnableSmartActions` 属性 (双向绑定复选框)
+  - `PlaySelected` 同步开关到 `workflow.EnableSmartActions`
+  - `SyncFromWorkflow(w)` 在切换选中流程时同步开关状态
+  - 订阅 `_player.VariableExtracted` / `SmartActionFailed` 事件并转发为 public 事件
+- **扩展 ViewModels/MainViewModel.cs**：
+  - 传 `_windowTreeService` 到 WorkflowRecorderViewModel
+  - 订阅 `libraryVM.VariableExtracted` / `SmartActionFailed`
+  - `OnVariableExtracted` 更新 `LastExtractedVariable` 状态栏提示
+  - `OnSmartActionFailed` 调用 `ShowSmartFailureDialog` 显示 3 按钮对话框 (重试/跳过/中止)
+- **扩展 Services/IDialogService.cs**：新增 `ShowCustomDialog(title, message, buttonLabels, defaultIndex)` — 用 Window 动态构建多按钮对话框
+- **扩展 MainWindow.xaml**：
+  - 标题更新为 v1.5.0
+  - 录制页工具栏新增三个插入按钮 (⏳ 等待窗口 / 📋 提取信息 / ⏱ 插入等待) + 分隔线
+  - 流程库播放参数区改为 StackPanel 双行布局，第二行新增「🧠 启用智能监测」复选框
+- **向后兼容**：所有新增字段都有默认值，旧 workflows.json 无需迁移即可加载；默认 `EnableSmartActions=false` 保证不改变 v1.4.0 行为
 
 ### v1.4.0 (2026-07-20) - 流程点击功能 + UI 重构
 
